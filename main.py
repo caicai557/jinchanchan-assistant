@@ -18,6 +18,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent))
 
 from core.action import ActionType
+from core.action_queue import ActionQueue
 from core.control.action_executor import ActionExecutor
 from core.game_state import GameState
 from core.llm.client import LLMClient, LLMConfig, LLMProvider
@@ -32,6 +33,7 @@ class TUIState(TypedDict):
     last_action: str
     last_source: str
     last_confidence: float
+    action_queue: ActionQueue
 
 
 # 配置日志
@@ -326,11 +328,13 @@ def run_tui(
     )
 
     # 存储最新截图和识别结果
+    action_queue = ActionQueue(max_history=50)
     state: TUIState = {
         "last_screenshot": None,
         "last_action": "等待中...",
         "last_source": "-",
         "last_confidence": 0.0,
+        "action_queue": action_queue,
     }
 
     def build_stats_panel() -> Panel:
@@ -371,6 +375,42 @@ def run_tui(
         content.append(f"{state['last_confidence']:.2f}")
         return Panel(content, title="🎯 决策", border_style="green")
 
+    def build_queue_panel() -> Panel:
+        """构建动作队列面板"""
+        queue = state["action_queue"]
+        pending = queue.get_pending()
+        history = queue.get_history(limit=3)
+
+        lines = []
+
+        # 当前执行
+        current = queue.get_current()
+        if current:
+            lines.append("[bold yellow]▶ 执行中:[/bold yellow]")
+            lines.append(f"  {current.action.type.value}")
+
+        # 待执行
+        if pending:
+            lines.append(f"[bold cyan]⏳ 待执行 ({len(pending)}):[/bold cyan]")
+            for qa in pending[:4]:
+                target = f" → {qa.action.target}" if qa.action.target else ""
+                lines.append(f"  • {qa.action.type.value}{target}")
+            if len(pending) > 4:
+                lines.append(f"  [dim]... +{len(pending) - 4}[/dim]")
+
+        # 最近完成
+        if history:
+            lines.append("[bold green]✓ 已完成:[/bold green]")
+            for qa in history[:3]:
+                icon = "✓" if qa.status == "completed" else "✗"
+                color = "green" if qa.status == "completed" else "red"
+                lines.append(f"  [{color}]{icon}[/{color}] {qa.action.type.value}")
+
+        if not lines:
+            return Panel("[dim]队列为空[/dim]", title="📋 动作队列", border_style="magenta")
+
+        return Panel("\n".join(lines), title="📋 动作队列", border_style="magenta")
+
     def build_screenshot_panel() -> Panel:
         """构建截图面板"""
         if state["last_screenshot"] is not None:
@@ -398,6 +438,7 @@ def run_tui(
         layout["left"].split_column(
             Layout(build_stats_panel(), name="stats", ratio=2),
             Layout(build_action_panel(), name="action", ratio=1),
+            Layout(build_queue_panel(), name="queue", ratio=2),
         )
 
         layout["right"].update(build_screenshot_panel())
@@ -432,16 +473,26 @@ def run_tui(
 
             # 执行动作
             if result.action.type != ActionType.NONE:
+                # 加入队列
+                queue = state["action_queue"]
+                queue.enqueue(result.action)
+
                 if assistant.dry_run:
                     logger.info(f"[dry-run] 跳过: {result.action.type.value}")
+                    queue.complete_current(success=True)
                 else:
-                    exec_result = await assistant.executor.execute(result.action)
+                    # 取出并执行
+                    to_execute = queue.dequeue()
+                    if to_execute:
+                        exec_result = await assistant.executor.execute(to_execute.action)
 
-                    if exec_result.success:
-                        assistant._stats["actions_executed"] += 1
-                        logger.info(f"执行成功: {result.action.type.value}")
-                    else:
-                        logger.warning(f"执行失败: {exec_result.error}")
+                        if exec_result.success:
+                            assistant._stats["actions_executed"] += 1
+                            logger.info(f"执行成功: {result.action.type.value}")
+                            queue.complete_current(success=True)
+                        else:
+                            logger.warning(f"执行失败: {exec_result.error}")
+                            queue.complete_current(success=False, error=exec_result.error)
 
                     await asyncio.sleep(0.5)
 
