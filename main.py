@@ -207,6 +207,156 @@ def load_config(path: str = "config/config.yaml") -> dict[str, Any]:
         return {}
 
 
+def debug_windows(
+    platform: str = "mac",
+    filter_pattern: str | None = None,
+    use_regex: bool = False,
+    game_names: list[str] | None = None,
+) -> int:
+    """
+    调试窗口发现，输出所有候选窗口信息
+
+    Args:
+        platform: 平台
+        filter_pattern: 过滤模式
+        use_regex: 是否正则匹配
+        game_names: 游戏名称列表
+
+    Returns:
+        退出码
+    """
+    if platform != "mac":
+        logger.error("--debug-window 仅支持 mac 平台")
+        return 1
+
+    try:
+        from platforms.mac_playcover.window_manager import WindowManager
+    except ImportError as e:
+        logger.error(f"无法加载 WindowManager: {e}")
+        return 1
+
+    wm = WindowManager()
+    windows = wm.enumerate_windows(
+        filter_pattern=filter_pattern,
+        use_regex=use_regex,
+        visible_only=True,
+    )
+
+    print("\n=== 窗口枚举结果 ===")
+    print(f"{'标题':<30} {'进程':<20} {'PID':>7} {'WID':>7} {'可见':>4} {'尺寸':<15}")
+    print("-" * 95)
+
+    for w in windows:
+        title = w["title"][:28] + "..." if len(w["title"]) > 30 else w["title"]
+        owner = w["owner"][:18] + "..." if len(w["owner"]) > 20 else w["owner"]
+        size = f"{w['width']}x{w['height']}"
+        print(
+            f"{title:<30} {owner:<20} {w['pid']:>7} {w['window_id']:>7} "
+            f"{'✓' if w['visible'] else '✗':>4} {size:<15}"
+        )
+
+    print(f"\n共 {len(windows)} 个窗口")
+
+    # 检查游戏窗口匹配
+    if game_names is None:
+        game_names = ["金铲铲之战", "金铲铲", "TFT", "Teamfight Tactics"]
+
+    print("\n=== 游戏窗口匹配 ===")
+    for name in game_names:
+        win = wm.find_window_by_title(name)
+        if win:
+            print(f"✓ 找到: '{name}' -> {win.title} ({win.width}x{win.height})")
+        else:
+            print(f"✗ 未找到: '{name}'")
+
+    return 0
+
+
+def run_tui(
+    adapter: PlatformAdapter,
+    llm_client: LLMClient | None,
+    dry_run: bool,
+    interval: float,
+    budget: int,
+) -> int:
+    """
+    运行 TUI 界面
+
+    Args:
+        adapter: 平台适配器
+        llm_client: LLM 客户端
+        dry_run: 是否只读模式
+        interval: 决策间隔
+        budget: LLM 预算
+
+    Returns:
+        退出码
+    """
+    try:
+        from rich.console import Console
+        from rich.live import Live
+        from rich.panel import Panel
+        from rich.table import Table
+    except ImportError:
+        print("TUI 需要 rich 库: pip install rich")
+        return 1
+
+    console = Console()
+    assistant = JinchanchanAssistant(
+        platform_adapter=adapter,
+        llm_client=llm_client,
+        decision_interval=interval,
+        dry_run=dry_run,
+    )
+
+    def build_ui() -> Panel:
+        """构建 TUI 界面"""
+        stats = assistant._stats
+        engine_stats = assistant.decision_engine.get_stats()
+        llm_calls = llm_client._call_count if llm_client else 0
+
+        table = Table(show_header=False, box=None)
+        table.add_column("key", style="cyan")
+        table.add_column("value", style="green")
+
+        table.add_row("模式", "[red]DRY-RUN[/red]" if dry_run else "[green]LIVE[/green]")
+        table.add_row("决策次数", str(stats["total_decisions"]))
+        table.add_row("动作执行", str(stats["actions_executed"]))
+        table.add_row("错误计数", str(stats["errors"]))
+        table.add_row("规则决策", str(engine_stats.get("rule_decisions", 0)))
+        table.add_row("LLM 决策", str(engine_stats.get("llm_decisions", 0)))
+        table.add_row("LLM 调用", f"{llm_calls}/{budget}")
+
+        window_info = adapter.get_window_info()
+        if window_info:
+            table.add_row("窗口", f"{window_info.width}x{window_info.height}")
+        else:
+            table.add_row("窗口", "[red]未找到[/red]")
+
+        return Panel(table, title="金铲铲助手", border_style="blue")
+
+    async def run_with_ui() -> None:
+        """带 UI 的运行循环"""
+        console.print("[bold green]启动 TUI 模式，按 Ctrl+C 退出[/bold green]")
+        console.print(f"[cyan]dry_run={dry_run} budget={budget}[/cyan]")
+
+        # 简化版：每秒刷新一次 UI
+        import asyncio
+
+        assistant._running = True
+        try:
+            while assistant._running:
+                with Live(build_ui(), console=console, refresh_per_second=1):
+                    await assistant._game_loop()
+                    await asyncio.sleep(interval)
+        except KeyboardInterrupt:
+            assistant._running = False
+            assistant._print_stats()
+
+    asyncio.run(run_with_ui())
+    return 0
+
+
 async def main() -> int:
     parser = argparse.ArgumentParser(description="金铲铲助手")
 
@@ -225,11 +375,42 @@ async def main() -> int:
     parser.add_argument("--interval", "-i", type=float, default=2.0)
     parser.add_argument("--verbose", "-v", action="store_true")
     parser.add_argument("--config", default="config/config.yaml")
+    parser.add_argument(
+        "--debug-window",
+        action="store_true",
+        default=False,
+        help="枚举并输出所有候选窗口（仅 mac）",
+    )
+    parser.add_argument(
+        "--window-filter",
+        default=None,
+        help="窗口过滤模式（contains 或 regex 配合 --window-regex）",
+    )
+    parser.add_argument(
+        "--window-regex",
+        action="store_true",
+        default=False,
+        help="使用正则匹配窗口过滤",
+    )
+    parser.add_argument(
+        "--ui",
+        choices=["none", "tui"],
+        default="none",
+        help="UI 模式 (default: none)",
+    )
 
     args = parser.parse_args()
 
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
+
+    # 窗口调试模式
+    if args.debug_window:
+        return debug_windows(
+            platform=args.platform,
+            filter_pattern=args.window_filter,
+            use_regex=args.window_regex,
+        )
 
     # 加载 config.yaml，CLI > env > yaml > 默认值
     cfg = load_config(args.config)
@@ -267,13 +448,24 @@ async def main() -> int:
 
     # 启动摘要（不含敏感信息）
     logger.info(
-        "启动摘要: provider=%s model=%s timeout=%.1f budget=%d dry_run=%s",
+        "启动摘要: provider=%s model=%s timeout=%.1f budget=%d dry_run=%s ui=%s",
         provider,
         model or "(default)",
         timeout,
         budget,
         args.dry_run,
+        args.ui,
     )
+
+    # TUI 模式
+    if args.ui == "tui":
+        return run_tui(
+            adapter=adapter,
+            llm_client=llm_client,
+            dry_run=args.dry_run,
+            interval=args.interval,
+            budget=budget,
+        )
 
     assistant = JinchanchanAssistant(
         platform_adapter=adapter,

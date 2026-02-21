@@ -204,3 +204,67 @@ class WindowManager:
             pass
 
         return 1.0
+
+    def enumerate_windows(
+        self,
+        filter_pattern: str | None = None,
+        use_regex: bool = False,
+        visible_only: bool = True,
+    ) -> list[dict[str, Any]]:
+        """
+        枚举所有窗口并返回详细信息（用于调试）
+
+        Args:
+            filter_pattern: 过滤模式（contains 或 regex）
+            use_regex: 是否使用正则匹配
+            visible_only: 是否只返回可见窗口
+
+        Returns:
+            窗口信息列表
+        """
+        import re
+
+        windows = self._get_window_list()
+        result = []
+
+        for win in windows:
+            title = win.get("kCGWindowName", "") or ""
+            owner = win.get("kCGWindowOwnerName", "") or ""
+            pid = win.get("kCGWindowOwnerPID", 0)
+            win_id = win.get("kCGWindowNumber", 0)
+            layer = win.get("kCGWindowLayer", 0)
+            bounds = win.get("kCGWindowBounds", {})
+            alpha = win.get("kCGWindowAlpha", 1.0)
+
+            # 可见性判断
+            is_visible = alpha > 0 and layer == 0 and bounds.get("Width", 0) > 0
+            if visible_only and not is_visible:
+                continue
+
+            # 过滤
+            if filter_pattern:
+                search_text = f"{title} {owner}"
+                if use_regex:
+                    if not re.search(filter_pattern, search_text, re.IGNORECASE):
+                        continue
+                else:
+                    if filter_pattern.lower() not in search_text.lower():
+                        continue
+
+            result.append(
+                {
+                    "title": title or "(无标题)",
+                    "owner": owner,
+                    "pid": pid,
+                    "window_id": win_id,
+                    "visible": is_visible,
+                    "layer": layer,
+                    "alpha": alpha,
+                    "x": int(bounds.get("X", 0)),
+                    "y": int(bounds.get("Y", 0)),
+                    "width": int(bounds.get("Width", 0)),
+                    "height": int(bounds.get("Height", 0)),
+                }
+            )
+
+        return result
