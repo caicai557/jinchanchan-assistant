@@ -1,0 +1,393 @@
+{
+  "version": "S13",
+  "heroes": {
+    "亚索": {
+      "template": "heroes/cost1/yasuo.png",
+      "ocr_variants": ["亚索", "Yasuo", "yasuo"]
+    },
+    "菲奥娜": {
+      "template": "heroes/cost1/fiora.png",
+      "ocr_variants": ["菲奥娜", "Fiora", "fiora", "剑姬"]
+    },
+    "奈德丽": {
+      "template": "heroes/cost1/nidalee.png",
+      "ocr_variants": ["奈德丽", "Nidalee", "nidalee", "豹女"]
+    },
+    "薇恩": {
+      "template": "heroes/cost1/vayne.png",
+      "ocr_variants": ["薇恩", "Vayne", "vayne", "VN"]
+    },
+    "茂凯": {
+      "template": "heroes/cost1/maokai.png",
+      "ocr_variants": ["茂凯", "Maokai", "maokai", "大树"]
+    },
+    "塔姆": {
+      "template": "heroes/cost1/tahmkench.png",
+      "ocr_variants": ["塔姆", "Tahm Kench", "tahmkench"]
+    },
+    "黛安娜": {
+      "template": "heroes/cost1/diana.png",
+      "ocr_variants": ["黛安娜", "Diana", "diana", "皎月"]
+    },
+    "丽桑卓": {
+      "template": "heroes/cost1/lissandra.png",
+      "ocr_variants": ["丽桑卓", "Lissandra", "lissandra", "冰女"]
+    },
+    "斯维因": {
+      "template": "heroes/cost1/swain.png",
+      "ocr_variants": ["斯维因", "Swain", "swain", "乌鸦"]
+    },
+    "安妮": {
+      "template": "heroes/cost1/annie.png",
+      "ocr_variants": ["安妮", "Annie", "annie", "火女"]
+    },
+    "劫": {
+      "template": "heroes/cost2/zed.png",
+      "ocr_variants": ["劫", "Zed", "zed"]
+    },
+    "贾克斯": {
+      "template": "heroes/cost2/jax.png",
+      "ocr_variants": ["贾克斯", "Jax", "jax", "武器"]
+    },
+    "迦娜": {
+      "template": "heroes/cost2/janna.png",
+      "ocr_variants": ["迦娜", "Janna", "janna", "风女"]
+    },
+    "派克": {
+      "template": "heroes/cost2/pyke.png",
+      "ocr_variants": ["派克", "Pyke", "pyke", "血港鬼影"]
+    },
+    "亚托克斯": {
+      "template": "heroes/cost2/aatrox.png",
+      "ocr_variants": ["亚托克斯", "Aatrox", "aatrox", "剑魔"]
+    },
+    "锤石": {
+      "template": "heroes/cost2/thresh.png",
+      "ocr_variants": ["锤石", "Thresh", "thresh"]
+    },
+    "璐璐": {
+      "template": "heroes/cost2/lulu.png",
+      "ocr_variants": ["璐璐", "Lulu", "lulu", "仙灵女巫"]
+    },
+    "布隆": {
+      "template": "heroes/cost2/braum.png",
+      "ocr_variants": ["布隆", "Braum", "braum"]
+    },
+    "诺提勒斯": {
+      "template": "heroes/cost2/nautilus.png",
+      "ocr_variants": ["诺提勒斯", "Nautilus", "nautilus", "泰坦"]
+    },
+    "蔚": {
+      "template": "heroes/cost2/vi.png",
+      "ocr_variants": ["蔚", "Vi", "vi", "皮城执法官"]
+    },
+    "卡特琳娜": {
+      "template": "heroes/cost3/katarina.png",
+      "ocr_variants": ["卡特琳娜", "Katarina", "katarina", "卡特"]
+    },
+    "阿卡丽": {
+      "template": "heroes/cost3/akali.png",
+      "ocr_variants": ["阿卡丽", "Akali", "akali"]
+    },
+    "艾希": {
+      "template": "heroes/cost3/ashe.png",
+      "ocr_variants": ["艾希", "Ashe", "ashe", "寒冰"]
+    },
+    "金克丝": {
+      "template": "heroes/cost3/jinx.png",
+      "ocr_variants": ["金克丝", "Jinx", "jinx"]
+    },
+    "妮蔻": {
+      "template": "heroes/cost3/neeko.png",
+      "ocr_variants": ["妮蔻", "Neeko", "neeko"]
+    },
+    "千珏": {
+      "template": "heroes/cost3/kindred.png",
+      "ocr_variants": ["千珏", "Kindred", "kindred"]
+    },
+    "希维尔": {
+      "template": "heroes/cost3/sivir.png",
+      "ocr_variants": ["希维尔", "Sivir", "sivir", "轮子妈"]
+    },
+    "悠米": {
+      "template": "heroes/cost3/yuumi.png",
+      "ocr_variants": ["悠米", "Yuumi", "yuumi", "猫咪"]
+    },
+    "伊芙琳": {
+      "template": "heroes/cost3/evelynn.png",
+      "ocr_variants": ["伊芙琳", "Evelynn", "evelynn", "寡妇"]
+    },
+    "阿狸": {
+      "template": "heroes/cost3/ahri.png",
+      "ocr_variants": ["阿狸", "Ahri", "ahri", "狐狸"]
+    },
+    "卡莉斯塔": {
+      "template": "heroes/cost4/kalista.png",
+      "ocr_variants": ["卡莉斯塔", "Kalista", "kalista", "滑板鞋"]
+    },
+    "泰达米尔": {
+      "template": "heroes/cost4/tryndamere.png",
+      "ocr_variants": ["泰达米尔", "Tryndamere", "tryndamere", "蛮王"]
+    },
+    "奥拉夫": {
+      "template": "heroes/cost4/olaf.png",
+      "ocr_variants": ["奥拉夫", "Olaf", "olaf"]
+    },
+    "锐雯": {
+      "template": "heroes/cost4/riven.png",
+      "ocr_variants": ["锐雯", "Riven", "riven", "放逐之刃"]
+    },
+    "烬": {
+      "template": "heroes/cost4/jhin.png",
+      "ocr_variants": ["烬", "Jhin", "jhin", "戏命师"]
+    },
+    "薇古丝": {
+      "template": "heroes/cost4/vex.png",
+      "ocr_variants": ["薇古丝", "Vex", "vex"]
+    },
+    "莫甘娜": {
+      "template": "heroes/cost4/morgana.png",
+      "ocr_variants": ["莫甘娜", "Morgana", "morgana"]
+    },
+    "慎": {
+      "template": "heroes/cost4/shen.png",
+      "ocr_variants": ["慎", "Shen", "shen", "暮光之眼"]
+    },
+    "卡西奥佩娅": {
+      "template": "heroes/cost4/cassiopeia.png",
+      "ocr_variants": ["卡西奥佩娅", "Cassiopeia", "cassiopeia", "蛇女"]
+    },
+    "艾瑞莉娅": {
+      "template": "heroes/cost4/irelia.png",
+      "ocr_variants": ["艾瑞莉娅", "Irelia", "irelia", "刀妹"]
+    },
+    "基兰": {
+      "template": "heroes/cost5/zilean.png",
+      "ocr_variants": ["基兰", "Zilean", "zilean", "时光"]
+    },
+    "莎弥拉": {
+      "template": "heroes/cost5/samira.png",
+      "ocr_variants": ["莎弥拉", "Samira", "samira", "莎弥拉"]
+    },
+    "奥恩": {
+      "template": "heroes/cost5/ornn.png",
+      "ocr_variants": ["奥恩", "Ornn", "ornn", "山隐之焰"]
+    },
+    "莉莉娅": {
+      "template": "heroes/cost5/lillia.png",
+      "ocr_variants": ["莉莉娅", "Lillia", "lillia", "含羞蓓蕾"]
+    },
+    "永恩": {
+      "template": "heroes/cost5/yone.png",
+      "ocr_variants": ["永恩", "Yone", "yone", "封魔剑魂"]
+    },
+    "瑟提": {
+      "template": "heroes/cost5/sett.png",
+      "ocr_variants": ["瑟提", "Sett", "sett", "腕豪"]
+    },
+    "阿兹尔": {
+      "template": "heroes/cost5/azir.png",
+      "ocr_variants": ["阿兹尔", "Azir", "azir", "沙皇"]
+    }
+  },
+  "items": {
+    "暴风大剑": {
+      "template": "items/base/bf_sword.png",
+      "ocr_variants": ["暴风大剑", "BF大剑", "大剑"]
+    },
+    "锁子甲": {
+      "template": "items/base/chain_vest.png",
+      "ocr_variants": ["锁子甲", "护甲"]
+    },
+    "负极斗篷": {
+      "template": "items/base/negatron_cloak.png",
+      "ocr_variants": ["负极斗篷", "魔抗", "斗篷"]
+    },
+    "女神之泪": {
+      "template": "items/base/tear.png",
+      "ocr_variants": ["女神之泪", "眼泪", "蓝泪"]
+    },
+    "巨人腰带": {
+      "template": "items/base/belt.png",
+      "ocr_variants": ["巨人腰带", "腰带"]
+    },
+    "反曲之弓": {
+      "template": "items/base/recurve_bow.png",
+      "ocr_variants": ["反曲之弓", "弓", "攻速弓"]
+    },
+    "无用大棒": {
+      "template": "items/base/rod.png",
+      "ocr_variants": ["无用大棒", "大棒", "法强棒"]
+    },
+    "拳套": {
+      "template": "items/base/glove.png",
+      "ocr_variants": ["拳套", "暴击拳套"]
+    },
+    "金铲铲": {
+      "template": "items/base/spatula.png",
+      "ocr_variants": ["金铲铲", "铲子"]
+    },
+    "无尽之刃": {
+      "template": "items/combined/infinity_edge.png",
+      "ocr_variants": ["无尽之刃", "无尽"]
+    },
+    "最后的轻语": {
+      "template": "items/combined/lastWhisper.png",
+      "ocr_variants": ["最后的轻语", "轻语", "穿甲弓"]
+    },
+    "鬼索的狂暴之刃": {
+      "template": "items/combined/guinsoosRageblade.png",
+      "ocr_variants": ["鬼索的狂暴之刃", "羊刀", "鬼索"]
+    },
+    "卢安娜的飓风": {
+      "template": "items/combined/runaansHurricane.png",
+      "ocr_variants": ["卢安娜的飓风", "飓风"]
+    },
+    "灭世者的死亡之帽": {
+      "template": "items/combined/rabadonsDeathcap.png",
+      "ocr_variants": ["灭世者的死亡之帽", "大帽", "帽子"]
+    },
+    "海克斯科技枪刃": {
+      "template": "items/combined/hextechGunblade.png",
+      "ocr_variants": ["海克斯科技枪刃", "科技枪", "枪刃"]
+    },
+    "守护天使": {
+      "template": "items/combined/guardianAngel.png",
+      "ocr_variants": ["守护天使", "复活甲", "甲"]
+    },
+    "离子火花": {
+      "template": "items/combined/ionicSpark.png",
+      "ocr_variants": ["离子火花", "离子"]
+    },
+    "荆棘之甲": {
+      "template": "items/combined/thornmail.png",
+      "ocr_variants": ["荆棘之甲", "反甲"]
+    },
+    "巨龙之爪": {
+      "template": "items/combined/dragonClaw.png",
+      "ocr_variants": ["巨龙之爪", "龙牙"]
+    },
+    "兹若特传送门": {
+      "template": "items/combined/zephyr.png",
+      "ocr_variants": ["兹若特传送门", "传送门"]
+    },
+    "正义之手": {
+      "template": "items/combined/handOfJustice.png",
+      "ocr_variants": ["正义之手", "正义手"]
+    },
+    "斯塔缇克电刃": {
+      "template": "items/combined/statikkShiv.png",
+      "ocr_variants": ["斯塔缇克电刃", "电刀"]
+    }
+  },
+  "synergies": {
+    "福星": {
+      "template": "synergies/fortune.png",
+      "ocr_variants": ["福星", "fortune"]
+    },
+    "战神": {
+      "template": "synergies/warlord.png",
+      "ocr_variants": ["战神", "warlord"]
+    },
+    "决斗大师": {
+      "template": "synergies/duelist.png",
+      "ocr_variants": ["决斗大师", "duelist", "决斗"]
+    },
+    "神射手": {
+      "template": "synergies/marksman.png",
+      "ocr_variants": ["神射手", "marksman", "射手"]
+    },
+    "魔法师": {
+      "template": "synergies/mage.png",
+      "ocr_variants": ["魔法师", "mage", "法师"]
+    },
+    "刺客": {
+      "template": "synergies/assassin.png",
+      "ocr_variants": ["刺客", "assassin"]
+    },
+    "斗士": {
+      "template": "synergies/brawler.png",
+      "ocr_variants": ["斗士", "brawler"]
+    },
+    "夜影": {
+      "template": "synergies/shade.png",
+      "ocr_variants": ["夜影", "shade"]
+    },
+    "腥红之月": {
+      "template": "synergies/cultist.png",
+      "ocr_variants": ["腥红之月", "cultist", "腥红"]
+    },
+    "灵魂莲华": {
+      "template": "synergies/spirit.png",
+      "ocr_variants": ["灵魂莲华", "spirit", "莲华"]
+    },
+    "玉剑仙": {
+      "template": "synergies/exile.png",
+      "ocr_variants": ["玉剑仙", "exile"]
+    },
+    "龙魂": {
+      "template": "synergies/dragon.png",
+      "ocr_variants": ["龙魂", "dragon"]
+    },
+    "三国猛将": {
+      "template": "synergies/daredevil.png",
+      "ocr_variants": ["三国猛将", "daredevil", "三国"]
+    },
+    "森林": {
+      "template": "synergies/elderwood.png",
+      "ocr_variants": ["森林", "elderwood"]
+    },
+    "忍者": {
+      "template": "synergies/ninja.png",
+      "ocr_variants": ["忍者", "ninja"]
+    },
+    "秘术师": {
+      "template": "synergies/mystic.png",
+      "ocr_variants": ["秘术师", "mystic", "秘术"]
+    },
+    "护卫": {
+      "template": "synergies/vanguard.png",
+      "ocr_variants": ["护卫", "vanguard"]
+    },
+    "重装战士": {
+      "template": "synergies/keeper.png",
+      "ocr_variants": ["重装战士", "keeper", "重装"]
+    },
+    "猎人": {
+      "template": "synergies/hunter.png",
+      "ocr_variants": ["猎人", "hunter"]
+    },
+    "夜幽": {
+      "template": "synergies/dusk.png",
+      "ocr_variants": ["夜幽", "dusk"]
+    },
+    "耀光使": {
+      "template": "synergies/dazzler.png",
+      "ocr_variants": ["耀光使", "dazzler", "耀光"]
+    },
+    "宗师": {
+      "template": "synergies/blademaster.png",
+      "ocr_variants": ["宗师", "blademaster"]
+    },
+    "天神": {
+      "template": "synergies/divine.png",
+      "ocr_variants": ["天神", "divine"]
+    },
+    "雷霆": {
+      "template": "synergies/electric.png",
+      "ocr_variants": ["雷霆", "electric"]
+    },
+    "浪人": {
+      "template": "synergies/loner.png",
+      "ocr_variants": ["浪人", "loner"]
+    },
+    "霸王": {
+      "template": "synergies/boss.png",
+      "ocr_variants": ["霸王", "boss"]
+    },
+    "屠龙勇士": {
+      "template": "synergies/slayer.png",
+      "ocr_variants": ["屠龙勇士", "slayer", "屠龙"]
+    }
+  }
+}

@@ -4,9 +4,12 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    from core.vision.recognition_engine import RecognizedEntity
 
 
 class GamePhase(str, Enum):
@@ -149,3 +152,93 @@ class GameState:
                 {"slot": s.index, "hero": s.hero_name, "cost": s.cost} for s in self.shop_slots
             ],
         }
+
+    def update_from_recognition(
+        self,
+        shop_entities: list["RecognizedEntity | None"] | None = None,
+        board_entities: list["RecognizedEntity"] | None = None,
+        bench_entities: list["RecognizedEntity | None"] | None = None,
+        synergy_entities: list["RecognizedEntity"] | None = None,
+        item_entities: list["RecognizedEntity"] | None = None,
+    ) -> None:
+        """
+        从识别结果更新游戏状态
+
+        Args:
+            shop_entities: 商店识别结果（5个槽位）
+            board_entities: 棋盘识别结果
+            bench_entities: 备战席识别结果（9个槽位）
+            synergy_entities: 羁绊识别结果
+            item_entities: 装备识别结果
+        """
+        # 更新商店
+        if shop_entities is not None:
+            for i, entity in enumerate(shop_entities):
+                if i < len(self.shop_slots):
+                    if entity is not None:
+                        self.shop_slots[i].hero_name = entity.entity_name
+                        # 费用需要从游戏数据获取，这里暂时设为 0
+                        self.shop_slots[i].cost = 0
+                        self.shop_slots[i].is_sold = False
+                    else:
+                        self.shop_slots[i].hero_name = None
+                        self.shop_slots[i].cost = 0
+                        self.shop_slots[i].is_sold = True
+
+        # 更新棋盘英雄
+        if board_entities is not None:
+            # 清空现有英雄
+            self.heroes.clear()
+
+            for entity in board_entities:
+                if entity.entity_type == "hero":
+                    # 计算棋盘位置
+                    from core.vision.regions import GameRegions
+
+                    cell_width = GameRegions.CELL_WIDTH
+                    cell_height = GameRegions.CELL_HEIGHT
+                    board_x = GameRegions.BOARD.x
+                    board_y = GameRegions.BOARD.y
+
+                    col = (entity.bbox[0] - board_x) // cell_width
+                    row = (entity.bbox[1] - board_y) // cell_height
+
+                    hero = Hero(
+                        name=entity.entity_name,
+                        cost=0,  # 需要从游戏数据获取
+                        stars=1,
+                        position=(row, col) if 0 <= row <= 3 and 0 <= col <= 6 else None,
+                    )
+                    self.heroes.append(hero)
+
+        # 更新备战席英雄
+        if bench_entities is not None:
+            self.bench_heroes.clear()
+
+            for i, entity in enumerate(bench_entities):
+                if entity is not None and entity.entity_type == "hero":
+                    hero = Hero(
+                        name=entity.entity_name,
+                        cost=0,
+                        stars=1,
+                        position=None,
+                    )
+                    self.bench_heroes.append(hero)
+
+        # 更新羁绊
+        if synergy_entities is not None:
+            for entity in synergy_entities:
+                if entity.entity_type == "synergy":
+                    # 更新或创建羁绊状态
+                    if entity.entity_name not in self.synergies:
+                        self.synergies[entity.entity_name] = Synergy(
+                            name=entity.entity_name,
+                            count=1,
+                            is_active=True,
+                        )
+                    else:
+                        self.synergies[entity.entity_name].is_active = True
+
+        # 更新装备
+        if item_entities is not None:
+            self.available_items = [e.entity_name for e in item_entities if e.entity_type == "item"]
