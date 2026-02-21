@@ -1,0 +1,195 @@
+{
+  "version": "S13",
+  "name": "福星版本",
+  "synergies": {
+    "福星": {
+      "type": "unique",
+      "breakpoints": [3, 6],
+      "description": "在赢得对抗玩家的战斗后，获得额外的战利品宝箱。宝箱质量随连赢次数提升。",
+      "heroes": ["塔姆", "安妮", "蔚", "金克丝", "卡莉斯塔", "瑟提"]
+    },
+    "战神": {
+      "type": "class",
+      "breakpoints": [2, 4, 6, 8],
+      "description": "战神英雄获得额外攻击力和吸血，已损失生命值越多效果越强。",
+      "heroes": ["奈德丽", "劫", "贾克斯", "亚托克斯", "卡特琳娜", "泰达米尔", "奥拉夫", "莎弥拉"]
+    },
+    "决斗大师": {
+      "type": "class",
+      "breakpoints": [2, 4, 6, 8],
+      "description": "决斗大师每次攻击获得攻击速度，最高叠加7次。",
+      "heroes": ["亚索", "菲奥娜", "贾克斯", "卡莉斯塔", "泰达米尔"]
+    },
+    "神射手": {
+      "type": "class",
+      "breakpoints": [2, 4],
+      "description": "神射手的攻击和技能会弹射到附近的敌人身上。",
+      "heroes": ["奈德丽", "薇恩", "艾希", "金克丝", "希维尔", "烬", "莎弥拉", "阿兹尔"]
+    },
+    "魔法师": {
+      "type": "class",
+      "breakpoints": [2, 4, 6, 8],
+      "description": "魔法师们的技能可以双重施法，并提供法术强度加成。",
+      "heroes": ["丽桑卓", "斯维因", "安妮", "璐璐", "妮蔻", "薇古丝", "阿狸", "莉莉娅"]
+    },
+    "刺客": {
+      "type": "class",
+      "breakpoints": [2, 4, 6],
+      "description": "刺客在战斗开始时跳向敌方后排，获得暴击率和暴击伤害加成。",
+      "heroes": ["黛安娜", "派克", "卡特琳娜", "阿卡丽"]
+    },
+    "斗士": {
+      "type": "class",
+      "breakpoints": [2, 4, 6, 8],
+      "description": "斗士获得额外生命值。",
+      "heroes": ["茂凯", "塔姆", "蔚", "奥恩", "瑟提"]
+    },
+    "夜影": {
+      "type": "class",
+      "breakpoints": [2, 3, 4],
+      "description": "夜影英雄在战斗中会潜入暗影，变得无法被选中。",
+      "heroes": ["劫", "伊芙琳"]
+    },
+    "猎人": {
+      "type": "class",
+      "breakpoints": [2, 3, 4, 5],
+      "description": "猎人每过几秒就会标记生命值百分比最低的敌人进行攻击。",
+      "heroes": ["千珏"]
+    },
+    "重装战士": {
+      "type": "class",
+      "breakpoints": [2, 4, 6, 8],
+      "description": "重装战士获得额外护甲。",
+      "heroes": ["诺提勒斯"]
+    },
+    "护卫": {
+      "type": "class",
+      "breakpoints": [2, 4],
+      "description": "护卫在战斗开始时为自己和附近的友军提供护盾。",
+      "heroes": ["布隆"]
+    },
+    "秘术师": {
+      "type": "class",
+      "breakpoints": [2, 4],
+      "description": "所有友军获得魔法抗性。",
+      "heroes": ["迦娜", "锤石", "璐璐", "悠米", "卡西奥佩娅", "基兰"]
+    },
+    "耀光使": {
+      "type": "class",
+      "breakpoints": [2, 4],
+      "description": "耀光使的技能会降低敌人的攻击力。",
+      "heroes": ["莫甘娜"]
+    },
+
+    "灵魂莲华": {
+      "type": "origin",
+      "breakpoints": [2, 4, 6],
+      "description": "灵魂莲华英雄可以链接到灵魂，共享生命值和法术强度。",
+      "heroes": ["薇恩", "黛安娜", "锤石", "诺提勒斯", "艾希", "千珏", "悠米", "阿狸", "锐雯", "薇古丝", "莉莉娅"]
+    },
+    "腥红之月": {
+      "type": "origin",
+      "breakpoints": [3, 6, 9],
+      "description": "腥红之月英雄在生命值降至50%时会召唤加里奥助战。羁绊越高加里奥越强。",
+      "heroes": ["派克", "亚托克斯", "伊芙琳", "烬", "基兰"]
+    },
+    "三国猛将": {
+      "type": "origin",
+      "breakpoints": [3, 6, 9],
+      "description": "三国猛将每次胜利都会获得生命值和法术强度加成。",
+      "heroes": ["卡特琳娜", "希维尔", "卡西奥佩娅", "阿兹尔"]
+    },
+    "龙魂": {
+      "type": "origin",
+      "breakpoints": [2, 4],
+      "description": "龙魂英雄获得龙魂祝福，提供攻击速度和额外伤害。",
+      "heroes": ["斯维因", "布隆", "奥拉夫"]
+    },
+    "森林": {
+      "type": "origin",
+      "breakpoints": [2, 4, 6],
+      "description": "森林英雄在战斗开始时复制自己。",
+      "heroes": ["茂凯", "丽桑卓"]
+    },
+    "玉剑仙": {
+      "type": "origin",
+      "breakpoints": [2, 4, 6],
+      "description": "玉剑仙英雄的技能消耗降低，并获得法术强度。",
+      "heroes": ["菲奥娜", "迦娜", "妮蔻", "莫甘娜"]
+    },
+    "天神": {
+      "type": "origin",
+      "breakpoints": [2, 4, 6, 8],
+      "description": "天神英雄在攻击6次或生命值降至50%以下时飞升，获得伤害减免和额外真实伤害。",
+      "heroes": ["艾瑞莉娅"]
+    },
+    "宗师": {
+      "type": "origin",
+      "breakpoints": [2, 3, 4],
+      "description": "宗师在战斗开始时降低敌人的攻击速度。",
+      "heroes": ["慎", "艾瑞莉娅", "永恩"]
+    },
+    "夜幽": {
+      "type": "origin",
+      "breakpoints": [2, 4, 6, 8],
+      "description": "夜幽英雄提高所有友军的法术强度。",
+      "heroes": ["锐雯", "薇古丝"]
+    },
+    "忍者": {
+      "type": "origin",
+      "breakpoints": [1, 4],
+      "description": "忍者获得额外的攻击力和法术强度。只有场上恰好有1名或4名忍者时才会激活。",
+      "heroes": ["劫", "阿卡丽", "慎"]
+    },
+    "浪人": {
+      "type": "origin",
+      "breakpoints": [1, 2],
+      "description": "浪人在战斗开始时如果相邻格没有友军，会获得护盾。",
+      "heroes": ["亚索", "永恩"]
+    },
+    "霸王": {
+      "type": "unique",
+      "breakpoints": [1],
+      "description": "霸王英雄在首次生命值降至40%以下时会做俯卧撑，期间变得不可选中，完成后满血并附带恐惧效果。",
+      "heroes": ["瑟提"]
+    },
+    "雷霆": {
+      "type": "unique",
+      "breakpoints": [1],
+      "description": "雷霆英雄的攻击和技能会对附近的敌人造成闪电伤害。",
+      "heroes": ["奥恩"]
+    }
+  },
+  "composition_recommendations": [
+    {
+      "name": "福星战神",
+      "core_synergies": ["福星", "战神"],
+      "key_heroes": ["瑟提", "奥拉夫", "莎弥拉", "卡莉斯塔"],
+      "description": "利用福星获得额外资源，后期转战神体系"
+    },
+    {
+      "name": "决斗大师",
+      "core_synergies": ["决斗大师"],
+      "key_heroes": ["卡莉斯塔", "泰达米尔", "贾克斯", "亚索"],
+      "description": "高攻速输出阵容，需要装备支持"
+    },
+    {
+      "name": "腥红之月",
+      "core_synergies": ["腥红之月"],
+      "key_heroes": ["烬", "基兰", "派克"],
+      "description": "召唤加里奥提供额外战斗力"
+    },
+    {
+      "name": "神射手",
+      "core_synergies": ["神射手"],
+      "key_heroes": ["烬", "金克丝", "莎弥拉", "艾希"],
+      "description": "弹射伤害，适合多目标场景"
+    },
+    {
+      "name": "灵魂莲华夜幽",
+      "core_synergies": ["灵魂莲华", "夜幽"],
+      "key_heroes": ["锐雯", "薇古丝", "莉莉娅"],
+      "description": "高法术强度，适合魔法输出"
+    }
+  ]
+}

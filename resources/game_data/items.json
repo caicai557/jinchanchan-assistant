@@ -1,0 +1,149 @@
+{
+  "version": "S13",
+  "name": "福星版本",
+  "base_items": [
+    {"name": "暴风大剑", "stat": "攻击力", "value": 15, "icon": "bf_sword"},
+    {"name": "锁子甲", "stat": "护甲", "value": 25, "icon": "chain_vest"},
+    {"name": "负极斗篷", "stat": "魔法抗性", "value": 25, "icon": "negatron_cloak"},
+    {"name": "女神之泪", "stat": "法力值", "value": 15, "icon": "tear"},
+    {"name": "巨人腰带", "stat": "生命值", "value": 200, "icon": "belt"},
+    {"name": "反曲之弓", "stat": "攻击速度", "value": "15%", "icon": "recurve_bow"},
+    {"name": "无用大棒", "stat": "法术强度", "value": 15, "icon": "rod"},
+    {"name": "拳套", "stat": "暴击/闪避", "value": "15%", "icon": "spatula"},
+    {"name": "金铲铲", "stat": "特殊", "value": "羁绊", "icon": "spatula"}
+  ],
+  "combined_items": [
+    {
+      "name": "无尽之刃",
+      "recipe": ["暴风大剑", "拳套"],
+      "effect": "提供75%暴击伤害，使技能可以暴击",
+      "tier": "S",
+      "recommended_for": ["物理输出"]
+    },
+    {
+      "name": "最后的轻语",
+      "recipe": ["反曲之弓", "拳套"],
+      "effect": "攻击对高护甲敌人造成额外真实伤害",
+      "tier": "S",
+      "recommended_for": ["物理输出"]
+    },
+    {
+      "name": "鬼索的狂暴之刃",
+      "recipe": ["反曲之弓", "无用大棒"],
+      "effect": "每次攻击获得6%攻击速度，无上限",
+      "tier": "S",
+      "recommended_for": ["攻速型输出"]
+    },
+    {
+      "name": "卢安娜的飓风",
+      "recipe": ["反曲之弓", "负极斗篷"],
+      "effect": "攻击额外发射弩箭攻击附近敌人",
+      "tier": "A",
+      "recommended_for": ["范围输出"]
+    },
+    {
+      "name": "灭世者的死亡之帽",
+      "recipe": ["无用大棒", "无用大棒"],
+      "effect": "提供80法术强度",
+      "tier": "A",
+      "recommended_for": ["魔法输出"]
+    },
+    {
+      "name": "珠光护手",
+      "recipe": ["无用大棒", "拳套"],
+      "effect": "使技能可以暴击",
+      "tier": "S",
+      "recommended_for": ["魔法输出"]
+    },
+    {
+      "name": "大天使之杖",
+      "recipe": ["女神之泪", "无用大棒"],
+      "effect": "每次施法获得法术强度",
+      "tier": "A",
+      "recommended_for": ["频繁施法者"]
+    },
+    {
+      "name": "蓝霸符",
+      "recipe": ["女神之泪", "女神之泪"],
+      "effect": "施法后回复法力值",
+      "tier": "A",
+      "recommended_for": ["法力需求低"]
+    },
+    {
+      "name": "守护天使",
+      "recipe": ["暴风大剑", "锁子甲"],
+      "effect": "死亡后复活，恢复50%生命值",
+      "tier": "S",
+      "recommended_for": ["前排坦克"]
+    },
+    {
+      "name": "石像鬼板甲",
+      "recipe": ["锁子甲", "负极斗篷"],
+      "effect": "每被一个敌人攻击就获得双抗",
+      "tier": "S",
+      "recommended_for": ["前排坦克"]
+    },
+    {
+      "name": "狂徒铠甲",
+      "recipe": ["巨人腰带", "巨人腰带"],
+      "effect": "提供1000生命值",
+      "tier": "A",
+      "recommended_for": ["坦克"]
+    },
+    {
+      "name": "日炎斗篷",
+      "recipe": ["锁子甲", "巨人腰带"],
+      "effect": "对附近敌人造成灼烧伤害并施加重伤",
+      "tier": "A",
+      "recommended_for": ["前排"]
+    },
+    {
+      "name": "泰坦的坚决",
+      "recipe": ["锁子甲", "反曲之弓"],
+      "effect": "每次受到攻击叠加护甲和攻击力",
+      "tier": "A",
+      "recommended_for": ["前排输出"]
+    },
+    {
+      "name": "基克的先驱",
+      "recipe": ["暴风大剑", "巨人腰带"],
+      "effect": "为附近友军提供攻击速度",
+      "tier": "A",
+      "recommended_for": ["辅助"]
+    },
+    {
+      "name": "能量圣杯",
+      "recipe": ["女神之泪", "负极斗篷"],
+      "effect": "为附近友军提供法术强度",
+      "tier": "A",
+      "recommended_for": ["辅助"]
+    },
+    {
+      "name": "钢铁烈阳之匣",
+      "recipe": ["锁子甲", "无用大棒"],
+      "effect": "为附近友军提供护盾",
+      "tier": "B",
+      "recommended_for": ["辅助"]
+    },
+    {
+      "name": "离子火花",
+      "recipe": ["负极斗篷", "无用大棒"],
+      "effect": "附近敌人施法时受到伤害",
+      "tier": "B",
+      "recommended_for": ["前排"]
+    },
+    {
+      "name": "救赎",
+      "recipe": ["女神之泪", "巨人腰带"],
+      "effect": "周期性治疗附近友军",
+      "tier": "B",
+      "recommended_for": ["辅助"]
+    }
+  ],
+  "item_recommendations": {
+    "物理输出核心": ["无尽之刃", "最后的轻语", "鬼索的狂暴之刃", "卢安娜的飓风"],
+    "魔法输出核心": ["珠光护手", "灭世者的死亡之帽", "大天使之杖", "蓝霸符"],
+    "坦克前排": ["守护天使", "石像鬼板甲", "狂徒铠甲", "日炎斗篷"],
+    "辅助功能": ["基克的先驱", "能量圣杯", "钢铁烈阳之匣", "救赎"]
+  }
+}

@@ -1,0 +1,97 @@
+# 金铲铲助手配置文件
+
+# 平台配置
+platform:
+  # mac 或 windows
+  type: mac
+
+  # Mac PlayCover 配置
+  mac:
+    window_title: "金铲铲之战"
+    use_mss: true  # 使用 mss 进行截图（更快）
+
+  # Windows 模拟器配置
+  windows:
+    adb_path: "adb"
+    emulator_port: 5555
+
+# LLM 配置
+llm:
+  # 提供商: anthropic, openai, qwen, none
+  provider: anthropic
+
+  # 模型（留空使用默认）
+  model: ""
+
+  # API Key（建议通过环境变量设置）
+  # api_key: ""
+
+  # 请求参数
+  max_tokens: 1024
+  temperature: 0.7
+
+# 决策引擎配置
+decision:
+  # 决策间隔（秒）
+  interval: 2.0
+
+  # 是否使用 SoM 标注
+  use_som_annotation: true
+
+  # 是否启用 LLM 回退
+  llm_fallback: true
+
+  # 禁用的规则（可选）
+  disabled_rules: []
+
+# 动作执行配置
+executor:
+  # 点击延迟
+  click_delay: 0.1
+
+  # 是否添加拟人化延迟
+  humanize: true
+
+  # 随机延迟范围 [最小, 最大]
+  random_delay_range: [0.05, 0.2]
+
+# 坐标配置（根据分辨率调整）
+# 以下为 1920x1080 分辨率的参考值
+coordinates:
+  # 商店槽位坐标 (5个)
+  shop_slots:
+    - [180, 950]
+    - [340, 950]
+    - [500, 950]
+    - [660, 950]
+    - [820, 950]
+
+  # 刷新按钮
+  refresh_button: [920, 950]
+
+  # 购买经验按钮
+  level_up_button: [1000, 950]
+
+  # 棋盘配置
+  board:
+    origin: [200, 400]
+    cell_size: [80, 80]
+    rows: 4
+    cols: 7
+
+  # 备战席坐标 (9个)
+  bench_slots:
+    - [200, 820]
+    - [280, 820]
+    - [360, 820]
+    - [440, 820]
+    - [520, 820]
+    - [600, 820]
+    - [680, 820]
+    - [760, 820]
+    - [840, 820]
+
+# 日志配置
+logging:
+  level: INFO
+  file: logs/jinchanchan.log
