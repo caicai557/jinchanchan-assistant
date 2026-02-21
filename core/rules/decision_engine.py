@@ -17,7 +17,6 @@ from core.llm.parser import ResponseParser
 from core.llm.prompts import PromptBuilder
 from core.rules.quick_actions import QuickActionEngine
 from core.rules.validator import ActionValidator
-from core.vision.som_annotator import SoMAnnotator
 
 
 @dataclass
@@ -61,7 +60,11 @@ class HybridDecisionEngine:
         self.action_validator = ActionValidator()
         self.response_parser = ResponseParser()
         self.prompt_builder = PromptBuilder()
-        self.som_annotator = SoMAnnotator()
+        self.som_annotator: Any = None
+        if use_som_annotation:
+            from core.vision.som_annotator import SoMAnnotator
+
+            self.som_annotator = SoMAnnotator()
 
         # 统计信息
         self._stats: dict[str, Any] = {
