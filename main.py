@@ -10,7 +10,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 import yaml
 
@@ -23,6 +23,16 @@ from core.game_state import GameState
 from core.llm.client import LLMClient, LLMConfig, LLMProvider
 from core.protocols import PlatformAdapter
 from core.rules.decision_engine import DecisionEngineBuilder
+
+
+class TUIState(TypedDict):
+    """TUI 状态"""
+
+    last_screenshot: Any  # PIL.Image.Image | None
+    last_action: str
+    last_source: str
+    last_confidence: float
+
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -294,14 +304,20 @@ def run_tui(
     """
     try:
         from rich.console import Console
+        from rich.layout import Layout
         from rich.live import Live
         from rich.panel import Panel
         from rich.table import Table
+        from rich.text import Text
     except ImportError:
         print("TUI 需要 rich 库: pip install rich")
         return 1
 
+    from core.ui.screenshot_renderer import ScreenshotRenderer
+
     console = Console()
+    screenshot_renderer = ScreenshotRenderer(width=50, use_color=True)
+
     assistant = JinchanchanAssistant(
         platform_adapter=adapter,
         llm_client=llm_client,
@@ -309,23 +325,32 @@ def run_tui(
         dry_run=dry_run,
     )
 
-    def build_ui() -> Panel:
-        """构建 TUI 界面"""
+    # 存储最新截图和识别结果
+    state: TUIState = {
+        "last_screenshot": None,
+        "last_action": "等待中...",
+        "last_source": "-",
+        "last_confidence": 0.0,
+    }
+
+    def build_stats_panel() -> Panel:
+        """构建统计面板"""
         stats = assistant._stats
         engine_stats = assistant.decision_engine.get_stats()
         llm_calls = llm_client._call_count if llm_client else 0
 
-        table = Table(show_header=False, box=None)
-        table.add_column("key", style="cyan")
+        table = Table(show_header=False, box=None, padding=(0, 1))
+        table.add_column("key", style="cyan", width=12)
         table.add_column("value", style="green")
 
-        table.add_row("模式", "[red]DRY-RUN[/red]" if dry_run else "[green]LIVE[/green]")
-        table.add_row("决策次数", str(stats["total_decisions"]))
-        table.add_row("动作执行", str(stats["actions_executed"]))
-        table.add_row("错误计数", str(stats["errors"]))
-        table.add_row("规则决策", str(engine_stats.get("rule_decisions", 0)))
-        table.add_row("LLM 决策", str(engine_stats.get("llm_decisions", 0)))
-        table.add_row("LLM 调用", f"{llm_calls}/{budget}")
+        mode_text = "[red]DRY-RUN[/red]" if dry_run else "[green]LIVE[/green]"
+        table.add_row("模式", mode_text)
+        table.add_row("决策", str(stats["total_decisions"]))
+        table.add_row("执行", str(stats["actions_executed"]))
+        table.add_row("错误", str(stats["errors"]))
+        table.add_row("规则", str(engine_stats.get("rule_decisions", 0)))
+        table.add_row("LLM", str(engine_stats.get("llm_decisions", 0)))
+        table.add_row("Budget", f"{llm_calls}/{budget}")
 
         window_info = adapter.get_window_info()
         if window_info:
@@ -333,24 +358,111 @@ def run_tui(
         else:
             table.add_row("窗口", "[red]未找到[/red]")
 
-        return Panel(table, title="金铲铲助手", border_style="blue")
+        return Panel(table, title="📊 状态", border_style="blue")
+
+    def build_action_panel() -> Panel:
+        """构建动作面板"""
+        content = Text()
+        content.append("最后动作: ", style="cyan")
+        content.append(f"{state['last_action']}\n", style="yellow")
+        content.append("来源: ", style="cyan")
+        content.append(f"{state['last_source']}\n", style="green")
+        content.append("置信度: ", style="cyan")
+        content.append(f"{state['last_confidence']:.2f}")
+        return Panel(content, title="🎯 决策", border_style="green")
+
+    def build_screenshot_panel() -> Panel:
+        """构建截图面板"""
+        if state["last_screenshot"] is not None:
+            try:
+                rendered = screenshot_renderer.render(state["last_screenshot"])
+                return Panel(rendered, title="📸 截图预览", border_style="yellow")
+            except Exception:
+                return Panel("[dim]渲染失败[/dim]", title="📸 截图预览", border_style="yellow")
+        else:
+            return Panel("[dim]等待截图...[/dim]", title="📸 截图预览", border_style="yellow")
+
+    def build_ui() -> Layout:
+        """构建完整 UI 布局"""
+        layout = Layout()
+
+        layout.split_column(
+            Layout(name="body", ratio=1),
+        )
+
+        layout["body"].split_row(
+            Layout(name="left", ratio=1),
+            Layout(name="right", ratio=2),
+        )
+
+        layout["left"].split_column(
+            Layout(build_stats_panel(), name="stats", ratio=2),
+            Layout(build_action_panel(), name="action", ratio=1),
+        )
+
+        layout["right"].update(build_screenshot_panel())
+
+        return layout
+
+    async def game_loop_with_screenshot() -> None:
+        """带截图保存的游戏循环"""
+        try:
+            # 获取截图
+            screenshot = adapter.get_screenshot()
+            state["last_screenshot"] = screenshot
+
+            # 决策
+            result = await assistant.decision_engine.decide(
+                screenshot=screenshot,
+                game_state=assistant._game_state,
+                priority="balanced",
+            )
+
+            assistant._stats["total_decisions"] += 1
+
+            # 更新状态
+            state["last_action"] = result.action.type.value
+            state["last_source"] = result.source
+            state["last_confidence"] = result.confidence
+
+            logger.info(
+                f"决策: {result.action.type.value} (来源: {result.source}, "
+                f"置信度: {result.confidence:.2f})"
+            )
+
+            # 执行动作
+            if result.action.type != ActionType.NONE:
+                if assistant.dry_run:
+                    logger.info(f"[dry-run] 跳过: {result.action.type.value}")
+                else:
+                    exec_result = await assistant.executor.execute(result.action)
+
+                    if exec_result.success:
+                        assistant._stats["actions_executed"] += 1
+                        logger.info(f"执行成功: {result.action.type.value}")
+                    else:
+                        logger.warning(f"执行失败: {exec_result.error}")
+
+                    await asyncio.sleep(0.5)
+
+        except Exception as e:
+            assistant._stats["errors"] += 1
+            logger.error(f"游戏循环出错: {e}")
 
     async def run_with_ui() -> None:
         """带 UI 的运行循环"""
         console.print("[bold green]启动 TUI 模式，按 Ctrl+C 退出[/bold green]")
         console.print(f"[cyan]dry_run={dry_run} budget={budget}[/cyan]")
 
-        # 简化版：每秒刷新一次 UI
-        import asyncio
-
         assistant._running = True
         try:
-            while assistant._running:
-                with Live(build_ui(), console=console, refresh_per_second=1):
-                    await assistant._game_loop()
+            with Live(build_ui(), console=console, refresh_per_second=2, screen=True):
+                while assistant._running:
+                    await game_loop_with_screenshot()
                     await asyncio.sleep(interval)
         except KeyboardInterrupt:
             assistant._running = False
+        finally:
             assistant._print_stats()
 
     asyncio.run(run_with_ui())
