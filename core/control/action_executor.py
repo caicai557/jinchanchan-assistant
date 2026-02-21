@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from core.action import Action, ActionType
+from core.coordinate_scaler import CoordinateScaler, Resolution
 from core.protocols import PlatformAdapter
 
 
@@ -31,12 +32,28 @@ class ActionExecutor:
     将抽象动作转换为具体的平台操作
     """
 
+    # 参考分辨率 (1920x1080) 下的坐标配置
+    _REFERENCE_COORDS: dict[str, Any] = {
+        # 商店槽位 (5个)
+        "shop_slots": [(180, 950), (340, 950), (500, 950), (660, 950), (820, 950)],
+        # 刷新按钮
+        "refresh_button": (920, 950),
+        # 购买经验按钮
+        "level_up_button": (1000, 950),
+        # 棋盘位置 (4行7列，左上角)
+        "board_origin": (200, 400),
+        "board_cell_size": (80, 80),
+        # 备战席 (9个槽位)
+        "bench_slots": [(200 + i * 80, 820) for i in range(9)],
+    }
+
     def __init__(
         self,
         adapter: PlatformAdapter,
         click_delay: float = 0.1,
         humanize: bool = True,
         random_delay_range: tuple[float, float] = (0.05, 0.2),
+        resolution: Resolution | None = None,
     ):
         """
         初始化执行器
@@ -46,27 +63,16 @@ class ActionExecutor:
             click_delay: 点击延迟
             humanize: 是否添加拟人化延迟
             random_delay_range: 随机延迟范围
+            resolution: 目标分辨率，None 时自动检测
         """
         self.adapter = adapter
         self.click_delay = click_delay
         self.humanize = humanize
         self.random_delay_range = random_delay_range
 
-        # 游戏界面坐标（相对于窗口）
-        # 这些值需要根据实际分辨率调整
-        self._coord_config: dict[str, Any] = {
-            # 商店槽位 (5个)
-            "shop_slots": [(180, 950), (340, 950), (500, 950), (660, 950), (820, 950)],
-            # 刷新按钮
-            "refresh_button": (920, 950),
-            # 购买经验按钮
-            "level_up_button": (1000, 950),
-            # 棋盘位置 (4行7列，左上角)
-            "board_origin": (200, 400),
-            "board_cell_size": (80, 80),
-            # 备战席 (9个槽位)
-            "bench_slots": [(200 + i * 80, 820) for i in range(9)],
-        }
+        # 坐标缩放器
+        self._scaler = CoordinateScaler(resolution)
+        self._coord_config = self._scale_coords(self._scaler)
 
         # 执行统计
         self._stats = {
@@ -74,6 +80,41 @@ class ActionExecutor:
             "successful_actions": 0,
             "failed_actions": 0,
         }
+
+    def _scale_coords(self, scaler: CoordinateScaler) -> dict[str, Any]:
+        """根据缩放器计算目标分辨率的坐标"""
+        return {
+            "shop_slots": scaler.scale_points(self._REFERENCE_COORDS["shop_slots"]),
+            "refresh_button": scaler.scale_point(*self._REFERENCE_COORDS["refresh_button"]),
+            "level_up_button": scaler.scale_point(*self._REFERENCE_COORDS["level_up_button"]),
+            "board_origin": scaler.scale_point(*self._REFERENCE_COORDS["board_origin"]),
+            "board_cell_size": scaler.scale_size(*self._REFERENCE_COORDS["board_cell_size"]),
+            "bench_slots": scaler.scale_points(self._REFERENCE_COORDS["bench_slots"]),
+        }
+
+    def update_resolution(self, width: int, height: int) -> None:
+        """
+        更新目标分辨率并重新计算坐标
+
+        Args:
+            width: 窗口宽度
+            height: 窗口高度
+        """
+        self._scaler = CoordinateScaler.from_window_size(width, height)
+        self._coord_config = self._scale_coords(self._scaler)
+
+    def auto_detect_resolution(self) -> tuple[int, int]:
+        """
+        自动检测窗口分辨率并更新坐标
+
+        Returns:
+            检测到的 (width, height)
+        """
+        window_info = self.adapter.get_window_info()
+        if window_info:
+            self.update_resolution(window_info.width, window_info.height)
+            return (window_info.width, window_info.height)
+        return (1920, 1080)
 
     async def execute(self, action: Action) -> ExecutionResult:
         """
