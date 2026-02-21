@@ -10,6 +10,9 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Any
+
+import yaml
 
 # 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).parent))
@@ -38,20 +41,12 @@ class JinchanchanAssistant:
         platform_adapter: PlatformAdapter,
         llm_client: LLMClient | None = None,
         decision_interval: float = 2.0,
-        auto_start: bool = False,
+        dry_run: bool = False,
     ):
-        """
-        初始化助手
-
-        Args:
-            platform_adapter: 平台适配器
-            llm_client: LLM 客户端（可选）
-            decision_interval: 决策间隔（秒）
-            auto_start: 是否自动开始
-        """
         self.adapter = platform_adapter
         self.llm_client = llm_client
         self.decision_interval = decision_interval
+        self.dry_run = dry_run
 
         # 初始化决策引擎
         engine_builder = DecisionEngineBuilder()
@@ -110,16 +105,18 @@ class JinchanchanAssistant:
 
             # 3. 执行动作
             if result.action.type != ActionType.NONE:
-                exec_result = await self.executor.execute(result.action)
-
-                if exec_result.success:
-                    self._stats["actions_executed"] += 1
-                    logger.info(f"执行成功: {result.action.type.value}")
+                if self.dry_run:
+                    logger.info(f"[dry-run] 跳过执行: {result.action.type.value}")
                 else:
-                    logger.warning(f"执行失败: {exec_result.error}")
+                    exec_result = await self.executor.execute(result.action)
 
-                # 执行后短暂等待
-                await asyncio.sleep(0.5)
+                    if exec_result.success:
+                        self._stats["actions_executed"] += 1
+                        logger.info(f"执行成功: {result.action.type.value}")
+                    else:
+                        logger.warning(f"执行失败: {exec_result.error}")
+
+                    await asyncio.sleep(0.5)
 
         except Exception as e:
             self._stats["errors"] += 1
@@ -171,32 +168,29 @@ def create_platform_adapter(platform: str, **kwargs) -> PlatformAdapter:
 
 
 def create_llm_client(
-    provider: str, api_key: str | None = None, model: str | None = None
+    provider: str,
+    model: str | None = None,
+    timeout: float = 30.0,
+    max_retries: int = 2,
+    budget: int = 50,
+    enable_logging: bool = False,
 ) -> LLMClient | None:
-    """
-    创建 LLM 客户端
-
-    Args:
-        provider: 提供商名称
-        api_key: API Key
-        model: 模型名称
-
-    Returns:
-        LLMClient 实例或 None
-    """
     if provider == "none":
         return None
 
     try:
         provider_enum = LLMProvider(provider)
         default_model = LLMConfig.DEFAULT_MODELS.get(provider_enum, "")
-        final_model = model or default_model or ""
 
         return LLMClient(
             LLMConfig(
                 provider=provider_enum,
-                api_key=api_key or os.getenv(f"{provider.upper()}_API_KEY"),
-                model=final_model,
+                api_key=os.getenv(f"{provider.upper()}_API_KEY") or os.getenv("LLM_API_KEY"),
+                model=model or default_model or "",
+                timeout=timeout,
+                max_retries=max_retries,
+                budget_per_session=budget,
+                enable_logging=enable_logging,
             )
         )
     except Exception as e:
@@ -204,66 +198,91 @@ def create_llm_client(
         return None
 
 
-async def main():
-    """主函数"""
-    parser = argparse.ArgumentParser(description="金铲铲助手 - AI 驱动的金铲铲之战游戏助手")
+def load_config(path: str = "config/config.yaml") -> dict[str, Any]:
+    """加载 YAML 配置，不存在则返回空 dict。"""
+    try:
+        with open(path) as f:
+            return yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        return {}
 
-    # 平台选项
-    parser.add_argument(
-        "--platform",
-        "-p",
-        choices=["mac", "windows"],
-        default="mac",
-        help="运行平台 (default: mac)",
-    )
 
-    # LLM 选项
+async def main() -> int:
+    parser = argparse.ArgumentParser(description="金铲铲助手")
+
+    parser.add_argument("--platform", "-p", choices=["mac", "windows"], default="mac")
     parser.add_argument(
         "--llm-provider",
-        choices=["anthropic", "openai", "qwen", "none"],
-        default="none",
-        help="LLM 提供商 (default: none)",
+        choices=["anthropic", "openai", "qwen", "gemini", "none"],
+        default=None,
     )
-    parser.add_argument("--llm-model", help="LLM 模型名称")
-    parser.add_argument("--llm-api-key", help="LLM API Key (也可以通过环境变量设置)")
-
-    # 运行选项
-    parser.add_argument(
-        "--interval", "-i", type=float, default=2.0, help="决策间隔秒数 (default: 2.0)"
-    )
-    parser.add_argument("--verbose", "-v", action="store_true", help="详细输出")
+    parser.add_argument("--llm-model", default=None)
+    parser.add_argument("--llm-timeout", type=float, default=None)
+    parser.add_argument("--llm-retries", type=int, default=None)
+    parser.add_argument("--llm-budget", type=int, default=None)
+    parser.add_argument("--llm-log", action="store_true", default=False)
+    parser.add_argument("--dry-run", action="store_true", default=False)
+    parser.add_argument("--interval", "-i", type=float, default=2.0)
+    parser.add_argument("--verbose", "-v", action="store_true")
+    parser.add_argument("--config", default="config/config.yaml")
 
     args = parser.parse_args()
 
-    # 配置日志级别
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
+
+    # 加载 config.yaml，CLI > env > yaml > 默认值
+    cfg = load_config(args.config)
+    llm_cfg = cfg.get("llm", {}) if isinstance(cfg.get("llm"), dict) else {}
+
+    provider = args.llm_provider or os.getenv("LLM_PROVIDER") or llm_cfg.get("provider", "none")
+    model = args.llm_model or os.getenv("LLM_MODEL") or llm_cfg.get("model") or None
+    timeout = args.llm_timeout or float(llm_cfg.get("timeout", 30.0))
+    retries = (
+        args.llm_retries if args.llm_retries is not None else int(llm_cfg.get("max_retries", 2))
+    )
+    budget = (
+        args.llm_budget
+        if args.llm_budget is not None
+        else int(llm_cfg.get("budget_per_session", 50))
+    )
+    enable_log = args.llm_log or llm_cfg.get("enable_logging", False)
 
     # 创建平台适配器
     try:
         adapter = create_platform_adapter(args.platform)
-        logger.info(f"平台适配器创建成功: {args.platform}")
     except Exception as e:
         logger.error(f"创建平台适配器失败: {e}")
         return 1
 
     # 创建 LLM 客户端
     llm_client = create_llm_client(
-        provider=args.llm_provider, api_key=args.llm_api_key, model=args.llm_model
+        provider=provider,
+        model=model,
+        timeout=timeout,
+        max_retries=retries,
+        budget=budget,
+        enable_logging=enable_log,
     )
 
-    if llm_client:
-        logger.info(f"LLM 客户端创建成功: {args.llm_provider}")
-    else:
-        logger.info("使用纯规则模式（无 LLM）")
+    # 启动摘要（不含敏感信息）
+    logger.info(
+        "启动摘要: provider=%s model=%s timeout=%.1f budget=%d dry_run=%s",
+        provider,
+        model or "(default)",
+        timeout,
+        budget,
+        args.dry_run,
+    )
 
-    # 创建并运行助手
     assistant = JinchanchanAssistant(
-        platform_adapter=adapter, llm_client=llm_client, decision_interval=args.interval
+        platform_adapter=adapter,
+        llm_client=llm_client,
+        decision_interval=args.interval,
+        dry_run=args.dry_run,
     )
 
     await assistant.run()
-
     return 0
 
 

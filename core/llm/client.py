@@ -4,14 +4,18 @@ LLM 客户端
 支持多种 LLM 提供商：Anthropic Claude、OpenAI、通义千问等
 """
 
+import asyncio
 import base64
 import io
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, ClassVar
 
 from PIL import Image
+
+logger = logging.getLogger("llm")
 
 
 class LLMProvider(str, Enum):
@@ -34,6 +38,10 @@ class LLMConfig:
     base_url: str | None = None
     max_tokens: int = 1024
     temperature: float = 0.7
+    timeout: float = 30.0
+    max_retries: int = 2
+    budget_per_session: int = 50
+    enable_logging: bool = False
 
     # 默认模型映射
     DEFAULT_MODELS: ClassVar[dict[LLMProvider, str]] = {
@@ -310,17 +318,12 @@ class LLMClient:
     """
 
     def __init__(self, config: LLMConfig | None = None) -> None:
-        """
-        初始化 LLM 客户端
-
-        Args:
-            config: LLM 配置，如果为 None 则从环境变量读取
-        """
         if config is None:
             config = self._load_config_from_env()
 
         self.config = config
         self._client: BaseLLMClient = self._create_client()
+        self._call_count = 0
 
     def _load_config_from_env(self) -> LLMConfig:
         """从环境变量加载配置"""
@@ -360,6 +363,25 @@ class LLMClient:
 
         return client_class(self.config)
 
+    async def _guarded_call(self, fn: Any, *args: Any, **kwargs: Any) -> str:
+        if self._call_count >= self.config.budget_per_session:
+            raise RuntimeError("LLM 调用预算耗尽")
+        last_err: Exception | None = None
+        for _ in range(self.config.max_retries + 1):
+            try:
+                result: str = await asyncio.wait_for(
+                    fn(*args, **kwargs), timeout=self.config.timeout
+                )
+                self._call_count += 1
+                if self.config.enable_logging:
+                    logger.debug("llm response=%.80s", result[:80])
+                return result
+            except asyncio.TimeoutError:
+                raise
+            except Exception as exc:
+                last_err = exc
+        raise last_err  # type: ignore[misc]
+
     async def analyze_game_state(
         self,
         screenshot: Image.Image,
@@ -387,8 +409,12 @@ class LLMClient:
         if game_knowledge:
             prompt += f"\n\n游戏知识：{game_knowledge}"
 
-        return await self._client.chat_with_image(
-            prompt=prompt, image=screenshot, system_prompt=GamePrompts.SYSTEM_PROMPT, **kwargs
+        return await self._guarded_call(
+            self._client.chat_with_image,
+            prompt=prompt,
+            image=screenshot,
+            system_prompt=GamePrompts.SYSTEM_PROMPT,
+            **kwargs,
         )
 
     async def decide_action(
@@ -413,19 +439,25 @@ class LLMClient:
 
         prompt = GamePrompts.build_decision_prompt(game_state=game_state, priority=priority)
 
-        return await self._client.chat_with_image(
-            prompt=prompt, image=screenshot, system_prompt=GamePrompts.SYSTEM_PROMPT, **kwargs
+        return await self._guarded_call(
+            self._client.chat_with_image,
+            prompt=prompt,
+            image=screenshot,
+            system_prompt=GamePrompts.SYSTEM_PROMPT,
+            **kwargs,
         )
 
     async def chat(self, messages: list[dict[str, Any]], **kwargs: Any) -> str:
         """发送聊天请求"""
-        return await self._client.chat(messages, **kwargs)
+        return await self._guarded_call(self._client.chat, messages, **kwargs)
 
     async def chat_with_image(
         self, prompt: str, image: Image.Image, system_prompt: str | None = None, **kwargs: Any
     ) -> str:
         """发送带图片的聊天请求"""
-        return await self._client.chat_with_image(prompt, image, system_prompt, **kwargs)
+        return await self._guarded_call(
+            self._client.chat_with_image, prompt, image, system_prompt, **kwargs
+        )
 
 
 def create_llm_client(

@@ -117,6 +117,12 @@ python main.py --platform windows --port 5555
 | `LLM_API_KEY` | 通用 LLM API Key |
 | `LLM_MODEL` | 默认模型 |
 
+## 安全：Key 管理
+
+- 使用 `.env` + `python-dotenv` 注入 key，不要硬编码
+- `.env` 已在 `.gitignore`，不会被提交
+- Key rotation 步骤：生成新 key → 更新 `.env` → 验证连通性 → 吊销旧 key
+
 ## 开发
 
 ### 运行测试
