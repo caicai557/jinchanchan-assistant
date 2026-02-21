@@ -75,12 +75,15 @@
 | 功能 | S13福星版 | 当前状态 | 证据 (S13) | 证据 (当前) | 优先级 |
 |------|-----------|----------|------------|-------------|--------|
 | PaddleOCR v3 | ✅ | ⚠️ RapidOCR | `models/ch_PP-OCRv3_*.bin` | `ocr_engine.py:RapidOCR` | - |
-| 模板匹配库 | ✅ 99张 | ❌ 缺失 | `script/image/*.png` (99 files) | 无 | **P0** |
+| 模板匹配库 | ✅ 99张 | ⚠️ 框架完成 | `script/image/*.png` (99 files) | `registry.json` + 目录结构 | P1 |
+| 模板注册表 | ❌ | ✅ 已实现 | 无 | `template_registry.py` | - |
+| 识别引擎 | ✅ | ✅ 已实现 | C++ 内置 | `recognition_engine.py` | - |
+| UI 区域定义 | ❌ | ✅ 已实现 | 无 | `regions.py:GameRegions` | - |
 | YOLO 目标检测 | ✅ | ❌ 缺失 | `yolo_cpp_dll_no_gpu.dll` | 无 | P2 |
 | SoM 标注 | ❌ | ✅ 已实现 | 无 | `som_annotator.py` | - |
-| 英雄识别 | ✅ | ⚠️ 仅JSON | 模板图片 | `resources/game_data/heroes.json` | P1 |
-| 装备识别 | ✅ | ❌ 缺失 | 模板图片 | `resources/game_data/items.json` | P1 |
-| 羁绊识别 | ✅ | ❌ 缺失 | 模板图片 | `resources/game_data/synergies.json` | P1 |
+| 英雄识别 | ✅ | ⚠️ 框架完成 | 模板图片 | `registry.json:heroes` + JSON 数据 | P1 |
+| 装备识别 | ✅ | ⚠️ 框架完成 | 模板图片 | `registry.json:items` + JSON 数据 | P1 |
+| 羁绊识别 | ✅ | ⚠️ 框架完成 | 模板图片 | `registry.json:synergies` + JSON 数据 | P1 |
 
 ### 5. 规则/LLM 决策
 
@@ -136,18 +139,22 @@
 
 | 缺口 | 影响 | 解决方案 | 状态 |
 |------|------|----------|------|
-| 模板匹配库缺失 | 无法识别游戏 UI 元素 | 从 S13 导入或新建模板库 | ✅ 基础完成 |
-| 多分辨率适配 | 仅支持 1920x1080 | 动态坐标缩放 | ✅ 已解决 |
-| Mac 窗口发现失败 | 无法定位游戏窗口 | --debug-window 已实现 | ✅ 已解决 |
+| ~~模板匹配库缺失~~ | 无法识别游戏 UI 元素 | 从 S13 导入或新建模板库 | ✅ 框架完成 |
+| ~~多分辨率适配~~ | 仅支持 1920x1080 | 动态坐标缩放 | ✅ 已解决 |
+| ~~Mac 窗口发现失败~~ | 无法定位游戏窗口 | --debug-window 已实现 | ✅ 已解决 |
+
+> **当前 P0 缺口: 无**
 
 ### P1 - 影响可用性
 
 | 缺口 | 影响 | 解决方案 | 状态 |
 |------|------|----------|------|
-| 实时截图预览 | 无法确认识别正确性 | TUI 截图渲染 | ✅ 已解决 |
-| 识别字段可视化 | 调试困难 | TUI 动作面板 | ✅ 已解决 |
-| 动作队列显示 | 无法预知行为 | ActionQueue + TUI | ✅ 已解决 |
-| 英雄/装备/羁绊识别 | 仅靠 JSON 数据 | 模板库 + OCR | ⏳ 待实现 |
+| ~~实时截图预览~~ | 无法确认识别正确性 | TUI 截图渲染 | ✅ 已解决 |
+| ~~识别字段可视化~~ | 调试困难 | TUI 动作面板 | ✅ 已解决 |
+| ~~动作队列显示~~ | 无法预知行为 | ActionQueue + TUI | ✅ 已解决 |
+| 模板图片导入 | 无法实际识别 | 从 S13 复制图片 | ⏳ 待实现 |
+| 识别引擎集成 | 识别未接入决策 | main.py 集成 | ⏳ 待实现 |
+| 英雄/装备/羁绊识别 | 框架完成但缺模板 | 模板库 + OCR | ⏳ 框架完成 |
 
 ### P2 - 功能增强
 
@@ -191,11 +198,45 @@
 | 模板库建设 | ✅ 基础完成 | 814121a |
 | 多分辨率适配 | ✅ 完成 | 814121a |
 | TUI 截图预览 | ✅ 完成 | 5f313b1 |
+| 动作队列显示 | ✅ 完成 | 2a8254e |
+| **英雄/装备/羁绊识别框架** | ✅ 完成 | 3d67288 |
+| - regions.py (UI区域定义) | ✅ 完成 | 3d67288 |
+| - template_registry.py (模板注册表) | ✅ 完成 | 3d67288 |
+| - recognition_engine.py (识别引擎) | ✅ 完成 | 3d67288 |
+| - registry.json (元数据) | ✅ 完成 | 3d67288 |
+| - test_recognition.py (22测试) | ✅ 完成 | 3d67288 |
 
 ---
 
 ## 下一步行动
 
-1. **模板库建设** — 从 S13 的 `script/image/` 导入模板，或新建
-2. **多分辨率适配** — 实现坐标动态缩放
-3. **TUI 截图预览** — 在 TUI 中显示最新截图（ASCII/Unicode art）
+### 优先级排序
+
+1. **P1 模板图片导入** — 从 S13 的 `script/image/` 导入 99 张模板图片
+   - 映射时间戳文件名到语义名称
+   - 分类到 heroes/items/synergies 目录
+
+2. **P1 识别引擎集成** — 将 RecognitionEngine 接入主循环
+   - 在 main.py 中实例化
+   - 将识别结果传给决策引擎
+
+3. **P1 实时数据** — OCR 识别金币/等级
+   - 添加 UI 区域定义
+   - 集成到游戏状态更新
+
+### 验证命令
+
+```bash
+# 门禁验证
+make smoke  # 或 ./venv/bin/ruff check . && ./venv/bin/mypy . && ./venv/bin/pytest
+
+# Mac 平台 smoke
+./venv/bin/python main.py --platform mac --debug-window
+./venv/bin/python main.py --platform mac --ui tui --dry-run --interval 3
+```
+
+---
+
+## 详细审计报告
+
+完整对比见 [parity_audit.md](./parity_audit.md)
