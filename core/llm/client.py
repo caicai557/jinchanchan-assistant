@@ -20,6 +20,7 @@ class LLMProvider(str, Enum):
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
     QWEN = "qwen"
+    GEMINI = "gemini"
     LOCAL = "local"
 
 
@@ -39,6 +40,7 @@ class LLMConfig:
         LLMProvider.ANTHROPIC: "claude-3-5-sonnet-20241022",
         LLMProvider.OPENAI: "gpt-4o",
         LLMProvider.QWEN: "qwen-vl-max",
+        LLMProvider.GEMINI: "gemini-2.5-pro",
         LLMProvider.LOCAL: "local-vlm",
     }
 
@@ -261,6 +263,45 @@ class QwenClient(BaseLLMClient):
         return str(content) if content is not None else ""
 
 
+class GeminiClient(BaseLLMClient):
+    """Google Gemini 客户端"""
+
+    def __init__(self, config: LLMConfig) -> None:
+        super().__init__(config)
+        try:
+            from google import genai
+
+            self._genai = genai
+            self.client: Any = genai.Client(api_key=config.api_key)
+        except ImportError:
+            raise ImportError("请安装 google-genai: pip install google-genai")
+
+    async def chat(self, messages: list[dict[str, Any]], **kwargs: Any) -> str:
+        """发送聊天请求"""
+        contents = [m.get("content", "") for m in messages if m.get("role") == "user"]
+        response = self.client.models.generate_content(
+            model=self.config.model,
+            contents=contents,
+        )
+        return response.text or ""
+
+    async def chat_with_image(
+        self, prompt: str, image: Image.Image, system_prompt: str | None = None, **kwargs: Any
+    ) -> str:
+        """发送带图片的请求"""
+        config = self._genai.types.GenerateContentConfig(
+            max_output_tokens=kwargs.get("max_tokens", self.config.max_tokens),
+            temperature=kwargs.get("temperature", self.config.temperature),
+            system_instruction=system_prompt,
+        )
+        response = self.client.models.generate_content(
+            model=self.config.model,
+            contents=[image, prompt],
+            config=config,
+        )
+        return response.text or ""
+
+
 class LLMClient:
     """
     统一的 LLM 客户端
@@ -299,6 +340,7 @@ class LLMClient:
                 os.getenv("LLM_API_KEY")
                 or os.getenv("ANTHROPIC_API_KEY")
                 or os.getenv("OPENAI_API_KEY")
+                or os.getenv("GEMINI_API_KEY")
             ),
             base_url=os.getenv("LLM_BASE_URL"),
         )
@@ -309,6 +351,7 @@ class LLMClient:
             LLMProvider.ANTHROPIC: AnthropicClient,
             LLMProvider.OPENAI: OpenAIClient,
             LLMProvider.QWEN: QwenClient,
+            LLMProvider.GEMINI: GeminiClient,
         }
 
         client_class = clients.get(self.config.provider)
