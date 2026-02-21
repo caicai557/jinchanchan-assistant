@@ -238,7 +238,7 @@ class HybridDecisionEngine:
 class DecisionEngineBuilder:
     """决策引擎构建器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._llm_client: LLMClient | None = None
         self._use_som_annotation: bool = True
         self._llm_fallback: bool = True

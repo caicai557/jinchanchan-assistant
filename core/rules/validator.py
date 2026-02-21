@@ -4,6 +4,7 @@
 验证 LLM 返回的动作是否合法
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from core.action import Action, ActionType
@@ -32,8 +33,8 @@ class ActionValidator:
     验证动作的合法性和合理性
     """
 
-    def __init__(self):
-        self._validators: dict[ActionType, callable] = {
+    def __init__(self) -> None:
+        self._validators: dict[ActionType, Callable[[Action, GameState], ValidationResult]] = {
             ActionType.BUY_HERO: self._validate_buy_hero,
             ActionType.SELL_HERO: self._validate_sell_hero,
             ActionType.MOVE_HERO: self._validate_move_hero,

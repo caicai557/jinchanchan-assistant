@@ -90,5 +90,9 @@ warn_unused_configs = true
 ignore_missing_imports = true
 exclude = ["venv", "tests"]
 
+[[tool.mypy.overrides]]
+module = ["core.rules.*"]
+check_untyped_defs = true
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

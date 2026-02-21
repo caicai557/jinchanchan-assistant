@@ -12,6 +12,7 @@ from core.control.action_executor import ActionExecutor
 from core.game_state import GamePhase, GameState
 from core.protocols import WindowInfo
 from core.rules.decision_engine import HybridDecisionEngine
+from core.vision.som_annotator import SoMAnnotator
 
 # ── FakePlatformAdapter ──────────────────────────────────────────────
 
@@ -123,3 +124,31 @@ async def test_rule_decision_then_execute(
     # 3. 验证 adapter 收到了 click 调用
     click_calls = [c for c in fake_adapter.calls if c[0] == "click"]
     assert len(click_calls) == 1
+
+
+async def test_vision_annotation_then_decision(
+    fake_adapter: FakePlatformAdapter, low_hp_state: GameState
+) -> None:
+    """合成截图 → SoM 标注 → 决策 → 执行 完整路径。"""
+
+    # 1. 合成截图 + SoM 标注
+    fake_screenshot = Image.new("RGB", (1920, 1080), color=(30, 30, 30))
+    annotator = SoMAnnotator()
+    annotated, regions = annotator.create_full_annotation(fake_screenshot)
+
+    assert annotated.size == (1920, 1080)
+    assert "shop" in regions
+    assert "board" in regions
+
+    # 2. 决策（规则路径，不走 LLM）
+    engine = HybridDecisionEngine(llm_client=None, use_som_annotation=False, llm_fallback=False)
+    result = await engine.decide(annotated, low_hp_state)
+
+    assert result.source == "rule"
+    assert result.action.type == ActionType.LEVEL_UP
+
+    # 3. 执行
+    executor = ActionExecutor(adapter=fake_adapter, humanize=False)
+    exec_result = await executor.execute(result.action)
+
+    assert exec_result.success

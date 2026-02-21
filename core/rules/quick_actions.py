@@ -29,14 +29,14 @@ class QuickActionEngine:
     处理简单的、规则明确的操作，减轻 LLM 负担
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._rules: list[QuickActionRule] = []
-        self._enabled_rules: set = set()
+        self._enabled_rules: set[str] = set()
 
         # 注册默认规则
         self._register_default_rules()
 
-    def _register_default_rules(self):
+    def _register_default_rules(self) -> None:
         """注册默认的快速动作规则"""
 
         # 规则1：自动购买免费刷新（如果有）
