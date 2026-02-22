@@ -92,29 +92,50 @@ if ($LASTEXITCODE -ne 0) {
 
 # Check output
 $ExePath = Join-Path $DistDir "jinchanchan-assistant.exe"
-if (Test-Path $ExePath) {
-    Log-Info "Build successful"
-    Log-Info "Output: $ExePath"
-
-    # Run smoke tests
-    Log-Info "Running smoke tests on build..."
-
-    # --help
-    & $ExePath --help | Out-Null
-    if ($LASTEXITCODE -eq 0) { Log-Info "  --help OK" } else { Log-Warn "  --help failed" }
-
-    # --version
-    $VersionOutput = & $ExePath --version 2>&1
-    Log-Info "  --version: $VersionOutput"
-
-    # --dry-run (friendly output without device)
-    & $ExePath --platform windows --dry-run 2>&1 | Out-Null
-    Log-Info "  --dry-run completed"
-
-    Log-Info "Build finished"
-    Log-Info "Run: $ExePath --help"
-}
-else {
+if (-not (Test-Path $ExePath)) {
     Log-Error "Build failed, output not found"
     exit 1
 }
+
+Log-Info "Build successful"
+Log-Info "Output: $ExePath"
+
+# Run smoke tests
+Log-Info "Running smoke tests on build..."
+$SmokeFailed = $false
+
+# --help
+& $ExePath --help 2>&1 | Out-Null
+$HelpExit = $LASTEXITCODE
+if ($HelpExit -eq 0) {
+    Log-Info "  --help OK"
+} else {
+    Log-Error "  --help FAILED (exit: $HelpExit)"
+    $SmokeFailed = $true
+}
+
+# --version
+$VersionOutput = & $ExePath --version 2>&1
+$VersionExit = $LASTEXITCODE
+if ($VersionExit -eq 0) {
+    Log-Info "  --version: $VersionOutput"
+} else {
+    Log-Error "  --version FAILED (exit: $VersionExit)"
+    $SmokeFailed = $true
+}
+
+# --dry-run (may fail without device, that's OK)
+& $ExePath --platform windows --dry-run --llm-provider none 2>&1 | Out-Null
+$DryRunExit = $LASTEXITCODE
+# dry-run exit code is not critical, just log it
+Log-Info "  --dry-run completed (exit: $DryRunExit)"
+
+# Final result
+if ($SmokeFailed) {
+    Log-Error "Smoke tests FAILED"
+    exit 1
+}
+
+Log-Info "Smoke tests PASSED"
+Log-Info "Build finished"
+exit 0
