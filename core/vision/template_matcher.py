@@ -6,11 +6,42 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import cv2
-import numpy as np
 from PIL import Image
+
+if TYPE_CHECKING:
+    pass  # numpy only used at runtime, not for type hints
+
+# 延迟导入 cv2 和 numpy
+_cv2: Any = None
+_np: Any = None
+
+
+def _get_cv2() -> Any:
+    """获取 cv2 模块（延迟导入）"""
+    global _cv2
+    if _cv2 is None:
+        try:
+            import cv2
+
+            _cv2 = cv2
+        except ImportError as e:
+            raise ImportError("模板匹配需要 OpenCV: pip install opencv-python") from e
+    return _cv2
+
+
+def _get_np() -> Any:
+    """获取 numpy 模块（延迟导入）"""
+    global _np
+    if _np is None:
+        try:
+            import numpy  # type: ignore[import]
+
+            _np = numpy
+        except ImportError as e:
+            raise ImportError("模板匹配需要 numpy: pip install numpy") from e
+    return _np
 
 
 @dataclass
@@ -60,7 +91,7 @@ class TemplateMatcher:
         self.scales = scales or [1.0]
 
         # 加载模板
-        self.templates: dict[str, np.ndarray] = {}
+        self.templates: dict[str, Any] = {}  # np.ndarray at runtime
         self.template_info: dict[str, dict[str, Any]] = {}
 
         if templates_dir:
@@ -110,9 +141,10 @@ class TemplateMatcher:
         Returns:
             是否添加成功
         """
+        cv2 = _get_cv2()
         try:
             # 读取图片
-            template = cv2.imread(path, cv2.IMREAD_COLOR)
+            template = cv2.imread(path, cv2.IMREAD_COLOR)  # type: ignore[union-attr]
             if template is None:
                 return False
 
@@ -133,7 +165,7 @@ class TemplateMatcher:
             return False
 
     def add_template_from_array(
-        self, image: np.ndarray, name: str, metadata: dict[str, Any] | None = None
+        self, image: Any, name: str, metadata: dict[str, Any] | None = None
     ) -> None:
         """
         从 numpy 数组添加模板
@@ -173,11 +205,14 @@ class TemplateMatcher:
         if template_name not in self.templates:
             return None
 
+        cv2 = _get_cv2()
+        np = _get_np()
+
         threshold = threshold or self.default_threshold
         template = self.templates[template_name]
 
         # 转换为 OpenCV 格式
-        img_array = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        img_array = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)  # type: ignore[union-attr]
 
         if multi_scale:
             return self._match_multi_scale(img_array, template, template_name, threshold)
@@ -240,15 +275,18 @@ class TemplateMatcher:
         if template_name not in self.templates:
             return []
 
+        cv2 = _get_cv2()
+        np = _get_np()
+
         threshold = threshold or self.default_threshold
         template = self.templates[template_name]
 
         # 转换为 OpenCV 格式
-        img_array = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        img_array = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)  # type: ignore[union-attr]
 
         # 执行模板匹配
-        result = cv2.matchTemplate(img_array, template, cv2.TM_CCOEFF_NORMED)
-        locations = np.where(result >= threshold)
+        result = cv2.matchTemplate(img_array, template, cv2.TM_CCOEFF_NORMED)  # type: ignore[union-attr]
+        locations = np.where(result >= threshold)  # type: ignore[union-attr]
 
         results: list[MatchResult] = []
         h, w = template.shape[:2]
@@ -281,11 +319,13 @@ class TemplateMatcher:
         return results
 
     def _match_single(
-        self, image: np.ndarray, template: np.ndarray, template_name: str, threshold: float
+        self, image: Any, template: Any, template_name: str, threshold: float
     ) -> MatchResult | None:
         """单尺度匹配"""
-        result = cv2.matchTemplate(image, template, cv2.TM_CCOEFF_NORMED)
-        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+        cv2 = _get_cv2()
+
+        result = cv2.matchTemplate(image, template, cv2.TM_CCOEFF_NORMED)  # type: ignore[union-attr]
+        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)  # type: ignore[union-attr]
 
         if max_val >= threshold:
             h, w = template.shape[:2]
@@ -301,9 +341,11 @@ class TemplateMatcher:
         return None
 
     def _match_multi_scale(
-        self, image: np.ndarray, template: np.ndarray, template_name: str, threshold: float
+        self, image: Any, template: Any, template_name: str, threshold: float
     ) -> MatchResult | None:
         """多尺度匹配"""
+        cv2 = _get_cv2()
+
         best_result = None
         best_confidence: float = 0.0
 
@@ -314,14 +356,14 @@ class TemplateMatcher:
             if scale != 1.0:
                 new_w = int(w * scale)
                 new_h = int(h * scale)
-                scaled_template = cv2.resize(template, (new_w, new_h))
+                scaled_template = cv2.resize(template, (new_w, new_h))  # type: ignore[union-attr]
             else:
                 scaled_template = template
                 new_w, new_h = w, h
 
             # 执行匹配
-            result = cv2.matchTemplate(image, scaled_template, cv2.TM_CCOEFF_NORMED)
-            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+            result = cv2.matchTemplate(image, scaled_template, cv2.TM_CCOEFF_NORMED)  # type: ignore[union-attr]
+            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)  # type: ignore[union-attr]
 
             if max_val >= threshold and max_val > best_confidence:
                 best_confidence = max_val

@@ -8,6 +8,7 @@ import argparse
 import asyncio
 import logging
 import os
+import platform
 import sys
 from pathlib import Path
 from typing import Any, TypedDict
@@ -27,6 +28,108 @@ from core.game_state import GameState
 from core.llm.client import LLMClient, LLMConfig, LLMProvider
 from core.protocols import PlatformAdapter
 from core.rules.decision_engine import DecisionEngineBuilder
+
+
+def get_capability_summary() -> dict[str, Any]:
+    """
+    获取能力探测摘要（不触发重依赖导入）
+
+    Returns:
+        能力摘要字典
+    """
+    capabilities: dict[str, Any] = {}
+
+    # OCR 可用性（不实际导入 onnxruntime）
+    try:
+        import rapidocr_onnxruntime  # noqa: F401
+
+        capabilities["ocr"] = "rapidocr"
+    except ImportError:
+        try:
+            import pytesseract  # noqa: F401
+
+            capabilities["ocr"] = "tesseract"
+        except ImportError:
+            capabilities["ocr"] = "unavailable"
+
+    # 模板匹配（OpenCV）
+    try:
+        import cv2  # noqa: F401
+
+        capabilities["template_matching"] = "opencv"
+    except ImportError:
+        capabilities["template_matching"] = "unavailable"
+
+    # LLM providers（只检查环境变量，不导入）
+    llm_available: list[str] = []
+    if os.getenv("ANTHROPIC_API_KEY"):
+        llm_available.append("anthropic")
+    if os.getenv("OPENAI_API_KEY"):
+        llm_available.append("openai")
+    if os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY"):
+        llm_available.append("gemini")
+    capabilities["llm_configured"] = llm_available
+
+    # 模板数量
+    template_count = 0
+    s13_templates = 0
+    try:
+        from core.vision.template_registry import TemplateRegistry
+
+        registry = TemplateRegistry()
+        registry.load_from_registry_json()
+        template_count = len(registry._entries)
+        s13_templates = registry.count_s13_imported()
+    except Exception:
+        pass
+
+    # 平台适配器可用性
+    if platform.system() == "Darwin":
+        try:
+            from Quartz import CGWindowListCopyWindowInfo  # noqa: F401
+
+            capabilities["mac_adapter"] = "available"
+        except ImportError:
+            capabilities["mac_adapter"] = "unavailable"
+    elif platform.system() == "Windows":
+        try:
+            from platforms.windows_emulator import WindowsEmulatorAdapter  # noqa: F401
+
+            capabilities["windows_adapter"] = "available"
+        except ImportError:
+            capabilities["windows_adapter"] = "unavailable"
+
+    return {
+        "version": __version__,
+        "platform": platform.system(),
+        "python": platform.python_version(),
+        "capabilities": capabilities,
+        "template_count": template_count,
+        "s13_templates": s13_templates,
+    }
+
+
+def format_capability_summary() -> str:
+    """格式化能力摘要为可读字符串"""
+    cap = get_capability_summary()
+    lines = [
+        f"=== 金铲铲助手 v{cap['version']} ===",
+        f"平台: {cap['platform']} | Python: {cap['python']}",
+        "能力探测:",
+    ]
+
+    caps = cap["capabilities"]
+    lines.append(f"  OCR: {caps.get('ocr', 'N/A')}")
+    lines.append(f"  模板匹配: {caps.get('template_matching', 'N/A')}")
+    lines.append(f"  LLM 已配置: {caps.get('llm_configured', []) or '无'}")
+    lines.append(f"  模板数量: {cap.get('template_count', 0)} (S13: {cap.get('s13_templates', 0)})")
+
+    if "mac_adapter" in caps:
+        lines.append(f"  Mac 适配器: {caps['mac_adapter']}")
+    if "windows_adapter" in caps:
+        lines.append(f"  Windows 适配器: {caps['windows_adapter']}")
+
+    return "\n".join(lines)
 
 
 class TUIState(TypedDict):
@@ -525,7 +628,12 @@ def run_tui(
 
 async def main() -> int:
     parser = argparse.ArgumentParser(description="金铲铲助手")
-    parser.add_argument("--version", "-V", action="version", version=f"%(prog)s {__version__}")
+    parser.add_argument(
+        "--version", "-V", action="store_true", default=False, help="显示版本和能力摘要"
+    )
+    parser.add_argument(
+        "--capabilities", action="store_true", default=False, help="显示能力探测摘要并退出"
+    )
 
     parser.add_argument("--platform", "-p", choices=["mac", "windows"], default="mac")
     parser.add_argument(
@@ -567,6 +675,11 @@ async def main() -> int:
     )
 
     args = parser.parse_args()
+
+    # --version 或 --capabilities: 输出能力摘要并退出
+    if args.version or args.capabilities:
+        print(format_capability_summary())
+        return 0
 
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
@@ -623,6 +736,10 @@ async def main() -> int:
         args.dry_run,
         args.ui,
     )
+
+    # 能力探测摘要
+    if not args.debug_window:
+        print(format_capability_summary())
 
     # TUI 模式
     if args.ui == "tui":

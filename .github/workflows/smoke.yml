@@ -135,13 +135,10 @@ jobs:
           chmod +x scripts/build_mac.sh
           ./scripts/build_mac.sh
 
-      - name: Smoke test built executable
+      - name: Run product acceptance test
         run: |
-          # --help
-          ./dist/金铲铲助手 --help
-
-          # --version
-          ./dist/金铲铲助手 --version
+          chmod +x scripts/smoke_dist_mac.sh
+          ./scripts/smoke_dist_mac.sh --skip-build
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
@@ -149,6 +146,14 @@ jobs:
           name: jinchanchan-macos
           path: dist/金铲铲助手
           retention-days: 30
+
+      - name: Upload smoke test artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-artifacts-macos
+          path: artifacts/smoke/
+          retention-days: 7
 
   # Windows 构建
   build-windows:
@@ -174,14 +179,10 @@ jobs:
           chmod +x scripts/build_win.ps1 || true
           powershell -ExecutionPolicy Bypass -File scripts/build_win.ps1
 
-      - name: Smoke test built executable
-        shell: bash
+      - name: Run product acceptance test
+        shell: powershell
         run: |
-          # --help
-          ./dist/jinchanchan-assistant.exe --help
-
-          # --version
-          ./dist/jinchanchan-assistant.exe --version
+          powershell -ExecutionPolicy Bypass -File scripts/smoke_dist_win.ps1 -SkipBuild
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -189,3 +190,11 @@ jobs:
           name: jinchanchan-windows
           path: dist/jinchanchan-assistant.exe
           retention-days: 30
+
+      - name: Upload smoke test artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-artifacts-windows
+          path: artifacts/smoke/
+          retention-days: 7
