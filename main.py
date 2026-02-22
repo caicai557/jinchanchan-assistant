@@ -1,7 +1,7 @@
 """
-金铲铲助手 - 主程序入口
+Jinchanchan Assistant - Main Entry Point
 
-AI 驱动的金铲铲之战游戏助手，支持 Mac PlayCover 和 Windows 模拟器
+AI-powered assistant for TFT (Teamfight Tactics), supporting Mac PlayCover and Windows emulator
 """
 
 import argparse
@@ -13,13 +13,10 @@ import sys
 from pathlib import Path
 from typing import Any, TypedDict
 
-import yaml
-
-# 版本号
-__version__ = "0.1.0"
-
-# 添加项目根目录到路径
+# Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
+
+import yaml
 
 from core.action import ActionType
 from core.action_queue import ActionQueue
@@ -29,17 +26,48 @@ from core.llm.client import LLMClient, LLMConfig, LLMProvider
 from core.protocols import PlatformAdapter
 from core.rules.decision_engine import DecisionEngineBuilder
 
+# Version
+__version__ = "0.1.0"
+
+
+def setup_console_encoding() -> None:
+    """
+    Setup console encoding for Windows compatibility.
+
+    Ensures UTF-8 output on Windows to avoid cp1252 UnicodeEncodeError.
+    Call this as early as possible before any output.
+    """
+    # Set environment variables for child processes
+    if not os.environ.get("PYTHONUTF8"):
+        os.environ["PYTHONUTF8"] = "1"
+    if not os.environ.get("PYTHONIOENCODING"):
+        os.environ["PYTHONIOENCODING"] = "utf-8"
+
+    # Reconfigure stdout/stderr for UTF-8 (Python 3.7+)
+    if sys.platform == "win32":
+        try:
+            if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+                sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+                sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass  # Best effort, don't crash on encoding setup
+
+
+# Call encoding setup immediately
+setup_console_encoding()
+
 
 def get_capability_summary() -> dict[str, Any]:
     """
-    获取能力探测摘要（不触发重依赖导入）
+    Get capability summary (without importing heavy dependencies)
 
     Returns:
-        能力摘要字典
+        Capability summary dict
     """
     capabilities: dict[str, Any] = {}
 
-    # OCR 可用性（不实际导入 onnxruntime）
+    # OCR availability (without importing onnxruntime)
     try:
         import rapidocr_onnxruntime  # noqa: F401
 
@@ -52,7 +80,7 @@ def get_capability_summary() -> dict[str, Any]:
         except ImportError:
             capabilities["ocr"] = "unavailable"
 
-    # 模板匹配（OpenCV）
+    # Template matching (OpenCV)
     try:
         import cv2  # noqa: F401
 
@@ -60,7 +88,7 @@ def get_capability_summary() -> dict[str, Any]:
     except ImportError:
         capabilities["template_matching"] = "unavailable"
 
-    # LLM providers（只检查环境变量，不导入）
+    # LLM providers (check env only, no import)
     llm_available: list[str] = []
     if os.getenv("ANTHROPIC_API_KEY"):
         llm_available.append("anthropic")
@@ -70,7 +98,7 @@ def get_capability_summary() -> dict[str, Any]:
         llm_available.append("gemini")
     capabilities["llm_configured"] = llm_available
 
-    # 模板数量
+    # Template count
     template_count = 0
     s13_templates = 0
     try:
@@ -83,7 +111,7 @@ def get_capability_summary() -> dict[str, Any]:
     except Exception:
         pass
 
-    # 平台适配器可用性
+    # Platform adapter availability
     if platform.system() == "Darwin":
         try:
             from Quartz import CGWindowListCopyWindowInfo  # noqa: F401
@@ -110,17 +138,17 @@ def get_capability_summary() -> dict[str, Any]:
 
 
 def format_capability_summary() -> str:
-    """格式化能力摘要为可读字符串"""
+    """Format capability summary as readable string (ASCII only for Windows compatibility)"""
     from core.capabilities import get_capability_matrix
 
     matrix = get_capability_matrix()
     cap = get_capability_summary()
 
     lines = [
-        f"=== 金铲铲助手 v{__version__} [{matrix.flavor.value.upper()}] ===",
-        f"平台: {cap['platform']} | Python: {cap['python']}",
+        f"=== Jinchanchan Assistant v{__version__} [{matrix.flavor.value.upper()}] ===",
+        f"Platform: {cap['platform']} | Python: {cap['python']}",
         "",
-        matrix.format_summary(),
+        matrix.format_summary_ascii(),
     ]
 
     return "\n".join(lines)
@@ -806,24 +834,27 @@ def run_tui(
 
 
 async def main() -> int:
-    parser = argparse.ArgumentParser(description="金铲铲助手")
+    parser = argparse.ArgumentParser(description="Jinchanchan Assistant")
     parser.add_argument(
-        "--version", "-V", action="store_true", default=False, help="显示版本和能力摘要"
+        "--version", "-V", action="store_true", default=False, help="Show version and capabilities"
     )
     parser.add_argument(
-        "--capabilities", action="store_true", default=False, help="显示能力探测摘要并退出"
+        "--capabilities",
+        action="store_true",
+        default=False,
+        help="Show capability summary and exit",
     )
     parser.add_argument(
         "--require-full",
         action="store_true",
         default=False,
-        help="要求 Full flavor，缺失能力时返回非零退出码",
+        help="Require Full flavor, exit non-zero if capabilities missing",
     )
     parser.add_argument(
         "--self-test",
         choices=["offline-replay"],
         default=None,
-        help="运行自检测试并生成 replay_results.json",
+        help="Run self-test and generate replay_results.json",
     )
 
     parser.add_argument("--platform", "-p", choices=["mac", "windows"], default="mac")
@@ -845,24 +876,24 @@ async def main() -> int:
         "--debug-window",
         action="store_true",
         default=False,
-        help="枚举并输出所有候选窗口（仅 mac）",
+        help="Enumerate and print candidate windows (mac only)",
     )
     parser.add_argument(
         "--window-filter",
         default=None,
-        help="窗口过滤模式（contains 或 regex 配合 --window-regex）",
+        help="Window filter pattern (contains or regex with --window-regex)",
     )
     parser.add_argument(
         "--window-regex",
         action="store_true",
         default=False,
-        help="使用正则匹配窗口过滤",
+        help="Use regex for window filter",
     )
     parser.add_argument(
         "--ui",
         choices=["none", "tui"],
         default="none",
-        help="UI 模式 (default: none)",
+        help="UI mode (default: none)",
     )
 
     args = parser.parse_args()

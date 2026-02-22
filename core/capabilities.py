@@ -409,6 +409,40 @@ class CapabilityMatrix:
 
         return "\n".join(lines)
 
+    def format_summary_ascii(self) -> str:
+        """Format capability summary as ASCII string (Windows cp1252 safe)"""
+        lines = [
+            f"=== Capability Matrix [{self._flavor.value.upper()}] ===",
+            "",
+        ]
+
+        # Lite capabilities
+        lines.append("[Lite - Basic]")
+        for name, result in self._results.items():
+            if result.flavor == Flavor.LITE:
+                icon = "[OK]" if result.status == CapabilityStatus.AVAILABLE else "[X]"
+                lines.append(f"  {icon} {result.name}: {result.details}")
+
+        lines.append("")
+        lines.append("[Full - Advanced]")
+
+        for name, result in self._results.items():
+            if result.flavor == Flavor.FULL:
+                if result.status == CapabilityStatus.AVAILABLE:
+                    icon = "[OK]"
+                elif result.status == CapabilityStatus.PARTIAL:
+                    icon = "[~]"
+                elif result.status == CapabilityStatus.NOT_CONFIGURED:
+                    icon = "[?]"
+                else:
+                    icon = "[X]"
+                lines.append(f"  {icon} {result.name}: {result.details}")
+
+        lines.append("")
+        lines.append(f"Current tier: {self._flavor.value.upper()}")
+
+        return "\n".join(lines)
+
     def check_full_requirements(self) -> tuple[bool, list[str]]:
         """
         检查 FULL flavor 的硬性要求
