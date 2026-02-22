@@ -38,6 +38,9 @@ jobs:
   # Windows 模块导入验证 (无设备依赖)
   windows-import-test:
     runs-on: windows-latest
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
     steps:
       - uses: actions/checkout@v4
 
@@ -55,12 +58,9 @@ jobs:
         shell: bash
         run: |
           ./venv/Scripts/python -c "
-          print('=== Windows 模块导入验证 ===')
           from platforms.windows_emulator import WindowsEmulatorAdapter
-          print('✓ WindowsEmulatorAdapter')
           from platforms.windows_emulator.adb_controller import ADBController
-          print('✓ ADBController')
-          print('Windows 模块验证通过')
+          print('OK')
           "
 
       - name: Run pytest (exclude Mac-specific tests)
