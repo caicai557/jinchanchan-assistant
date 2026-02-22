@@ -22,6 +22,9 @@ dependencies = [
     # 配置
     "pyyaml>=6.0",
     "python-dotenv>=1.0.0",
+
+    # TUI
+    "rich>=13.0.0",
 ]
 
 [project.optional-dependencies]
@@ -58,7 +61,10 @@ dev = [
     "mypy>=1.5.0",
     "types-Pillow>=10.0.0",
     "types-PyYAML>=6.0",
-    "rich>=13.0.0",
+]
+
+build = [
+    "pyinstaller>=6.0.0",
 ]
 
 all = [

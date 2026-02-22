@@ -112,3 +112,80 @@ jobs:
 
       - name: Run recognition tests
         run: ./venv/bin/pytest tests/test_recognition.py -v
+
+  # macOS 构建
+  build-macos:
+    runs-on: macos-latest
+    needs: [lint-and-test, template-validation]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m venv venv
+          ./venv/bin/pip install --upgrade pip
+          ./venv/bin/pip install -e ".[dev,control,mac,build]"
+
+      - name: Build with PyInstaller
+        run: |
+          chmod +x scripts/build_mac.sh
+          ./scripts/build_mac.sh
+
+      - name: Smoke test built executable
+        run: |
+          # --help
+          ./dist/金铲铲助手 --help
+
+          # --version
+          ./dist/金铲铲助手 --version
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jinchanchan-macos
+          path: dist/金铲铲助手
+          retention-days: 30
+
+  # Windows 构建
+  build-windows:
+    runs-on: windows-latest
+    needs: [lint-and-test, windows-import-test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          python -m venv venv
+          ./venv/Scripts/pip install --upgrade pip
+          ./venv/Scripts/pip install -e ".[dev,windows,build]"
+
+      - name: Build with PyInstaller
+        shell: bash
+        run: |
+          chmod +x scripts/build_win.ps1 || true
+          powershell -ExecutionPolicy Bypass -File scripts/build_win.ps1
+
+      - name: Smoke test built executable
+        shell: bash
+        run: |
+          # --help
+          ./dist/jinchanchan-assistant.exe --help
+
+          # --version
+          ./dist/jinchanchan-assistant.exe --version
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jinchanchan-windows
+          path: dist/jinchanchan-assistant.exe
+          retention-days: 30

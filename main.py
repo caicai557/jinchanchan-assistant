@@ -14,6 +14,9 @@ from typing import Any, TypedDict
 
 import yaml
 
+# 版本号
+__version__ = "0.1.0"
+
 # 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -522,6 +525,7 @@ def run_tui(
 
 async def main() -> int:
     parser = argparse.ArgumentParser(description="金铲铲助手")
+    parser.add_argument("--version", "-V", action="version", version=f"%(prog)s {__version__}")
 
     parser.add_argument("--platform", "-p", choices=["mac", "windows"], default="mac")
     parser.add_argument(
