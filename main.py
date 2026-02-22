@@ -278,7 +278,7 @@ def run_doctor() -> int:
             wm = WindowManager()
             window = wm.find_game_window()
             if window:
-                print(f"  [OK] Game window found")
+                print("  [OK] Game window found")
                 print(f"       - {window.title} ({window.width}x{window.height})")
             else:
                 print("  [WARN] No game windows found")
