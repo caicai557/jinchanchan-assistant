@@ -111,23 +111,17 @@ def get_capability_summary() -> dict[str, Any]:
 
 def format_capability_summary() -> str:
     """格式化能力摘要为可读字符串"""
+    from core.capabilities import get_capability_matrix
+
+    matrix = get_capability_matrix()
     cap = get_capability_summary()
+
     lines = [
-        f"=== 金铲铲助手 v{cap['version']} ===",
+        f"=== 金铲铲助手 v{__version__} [{matrix.flavor.value.upper()}] ===",
         f"平台: {cap['platform']} | Python: {cap['python']}",
-        "能力探测:",
+        "",
+        matrix.format_summary(),
     ]
-
-    caps = cap["capabilities"]
-    lines.append(f"  OCR: {caps.get('ocr', 'N/A')}")
-    lines.append(f"  模板匹配: {caps.get('template_matching', 'N/A')}")
-    lines.append(f"  LLM 已配置: {caps.get('llm_configured', []) or '无'}")
-    lines.append(f"  模板数量: {cap.get('template_count', 0)} (S13: {cap.get('s13_templates', 0)})")
-
-    if "mac_adapter" in caps:
-        lines.append(f"  Mac 适配器: {caps['mac_adapter']}")
-    if "windows_adapter" in caps:
-        lines.append(f"  Windows 适配器: {caps['windows_adapter']}")
 
     return "\n".join(lines)
 

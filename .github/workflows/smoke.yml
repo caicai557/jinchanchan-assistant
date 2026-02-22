@@ -113,8 +113,8 @@ jobs:
       - name: Run recognition tests
         run: ./venv/bin/pytest tests/test_recognition.py -v
 
-  # macOS 构建
-  build-macos:
+  # macOS Lite 构建
+  build-macos-lite:
     runs-on: macos-latest
     needs: [lint-and-test, template-validation]
     steps:
@@ -124,26 +124,55 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install dependencies
+      - name: Install dependencies (lite)
         run: |
           python -m venv venv
           ./venv/bin/pip install --upgrade pip
           ./venv/bin/pip install -e ".[dev,control,mac,build]"
 
-      - name: Build with PyInstaller
+      - name: Build with PyInstaller (lite)
         run: |
           chmod +x scripts/build_mac.sh
-          ./scripts/build_mac.sh
+          ./scripts/build_mac.sh --flavor lite
 
-      - name: Run product acceptance test
-        run: |
-          chmod +x scripts/smoke_dist_mac.sh
-          ./scripts/smoke_dist_mac.sh --skip-build
-
-      - name: Upload macOS artifact
+      - name: Upload macOS lite artifact
         uses: actions/upload-artifact@v4
         with:
-          name: jinchanchan-macos
+          name: jinchanchan-macos-lite
+          path: dist/金铲铲助手-lite
+          retention-days: 30
+
+  # macOS Full 构建
+  build-macos-full:
+    runs-on: macos-latest
+    needs: [lint-and-test, template-validation]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies (full)
+        run: |
+          python -m venv venv
+          ./venv/bin/pip install --upgrade pip
+          ./venv/bin/pip install -e ".[dev,control,ocr,mac,build]"
+
+      - name: Build with PyInstaller (full)
+        run: |
+          chmod +x scripts/build_mac.sh
+          ./scripts/build_mac.sh --flavor full
+
+      - name: Run product acceptance test (full)
+        run: |
+          chmod +x scripts/smoke_dist_mac.sh
+          ./scripts/smoke_dist_mac.sh --skip-build --flavor full
+
+      - name: Upload macOS full artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jinchanchan-macos-full
           path: dist/金铲铲助手
           retention-days: 30
 
@@ -151,7 +180,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: smoke-artifacts-macos
+          name: smoke-artifacts-macos-full
           path: artifacts/smoke/
           retention-days: 7
 

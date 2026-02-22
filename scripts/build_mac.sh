@@ -1,6 +1,6 @@
 #!/bin/bash
 # macOS PyInstaller 打包脚本
-# 用法: ./scripts/build_mac.sh [--clean]
+# 用法: ./scripts/build_mac.sh [--clean] [--flavor lite|full]
 
 set -e
 
@@ -13,19 +13,44 @@ DIST_DIR="$PROJECT_ROOT/dist"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m'
 
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 
 cd "$PROJECT_ROOT"
 
-# 检查参数
+# 解析参数
 CLEAN_BUILD=false
-if [[ "$1" == "--clean" ]]; then
-    CLEAN_BUILD=true
+FLAVOR="full"
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --clean)
+            CLEAN_BUILD=true
+            shift
+            ;;
+        --flavor)
+            FLAVOR="$2"
+            shift 2
+            ;;
+        *)
+            log_error "未知参数: $1"
+            exit 1
+            ;;
+    esac
+done
+
+# 验证 flavor
+if [[ "$FLAVOR" != "lite" && "$FLAVOR" != "full" ]]; then
+    log_error "无效的 flavor: $FLAVOR (应为 lite 或 full)"
+    exit 1
 fi
+
+log_info "构建 Flavor: $FLAVOR"
 
 # 清理旧构建
 if [[ "$CLEAN_BUILD" == "true" ]]; then
@@ -41,66 +66,105 @@ fi
 
 # 安装 PyInstaller
 log_info "检查 PyInstaller..."
-./venv/bin/pip install pyinstaller>=6.0.0 -q
+./venv/bin/pip install "pyinstaller>=6.0.0" -q
 
 # 检查门禁
-log_info "运行门禁检查..."
+log_step "运行门禁检查..."
 ./venv/bin/ruff check . || { log_error "ruff check 失败"; exit 1; }
 ./venv/bin/mypy . || { log_error "mypy 失败"; exit 1; }
 ./venv/bin/pytest -q || { log_error "pytest 失败"; exit 1; }
 log_info "门禁通过 ✓"
 
-# 运行 PyInstaller
-log_info "开始打包..."
-./venv/bin/pyinstaller \
-    --name "金铲铲助手" \
-    --onefile \
-    --console \
-    --add-data "resources/templates:resources/templates" \
-    --add-data "resources/game_data:resources/game_data" \
-    --add-data "config/config.example.yaml:config" \
-    --hidden-import "pyyaml" \
-    --hidden-import "PIL" \
-    --hidden-import "pydantic" \
-    --hidden-import "mss" \
-    --hidden-import "numpy" \
-    --hidden-import "rich" \
-    --hidden-import "rich.console" \
-    --hidden-import "rich.layout" \
-    --hidden-import "rich.live" \
-    --hidden-import "rich.panel" \
-    --hidden-import "rich.table" \
-    --hidden-import "rich.text" \
-    --collect-all "rich" \
-    --exclude-module "cv2" \
-    --exclude-module "onnxruntime" \
-    --exclude-module "rapidocr_onnxruntime" \
-    --exclude-module "anthropic" \
-    --exclude-module "openai" \
-    --exclude-module "google.genai" \
-    --noupx \
-    --noconfirm \
+# 设置产物名称
+if [[ "$FLAVOR" == "lite" ]]; then
+    APP_NAME="金铲铲助手-lite"
+    # Lite: 排除重依赖
+    EXCLUDE_MODULES=(
+        "--exclude-module" "cv2"
+        "--exclude-module" "onnxruntime"
+        "--exclude-module" "rapidocr_onnxruntime"
+        "--exclude-module" "anthropic"
+        "--exclude-module" "openai"
+        "--exclude-module" "google.genai"
+    )
+else
+    APP_NAME="金铲铲助手"
+    # Full: 包含所有依赖
+    EXCLUDE_MODULES=()
+fi
+
+log_step "开始打包 ($FLAVOR)..."
+
+# 构建 PyInstaller 命令
+PYINSTALLER_CMD=(
+    ./venv/bin/pyinstaller
+    --name "$APP_NAME"
+    --onefile
+    --console
+    --add-data "resources/templates:resources/templates"
+    --add-data "resources/game_data:resources/game_data"
+    --add-data "config/config.example.yaml:config"
+    --hidden-import "pyyaml"
+    --hidden-import "PIL"
+    --hidden-import "pydantic"
+    --hidden-import "mss"
+    --hidden-import "numpy"
+    --hidden-import "rich"
+    --hidden-import "rich.console"
+    --hidden-import "rich.layout"
+    --hidden-import "rich.live"
+    --hidden-import "rich.panel"
+    --hidden-import "rich.table"
+    --hidden-import "rich.text"
+    --collect-all "rich"
+)
+
+# 添加 Full flavor 的包含模块
+if [[ "$FLAVOR" == "full" ]]; then
+    PYINSTALLER_CMD+=(
+        --hidden-import "cv2"
+        --hidden-import "numpy"
+        --collect-all "cv2"
+    )
+fi
+
+# 添加排除模块
+PYINSTALLER_CMD+=("${EXCLUDE_MODULES[@]}")
+
+# 完成
+PYINSTALLER_CMD+=(
+    --noupx
+    --noconfirm
     main.py
+)
+
+# 执行构建
+"${PYINSTALLER_CMD[@]}"
 
 # 检查产物
-if [[ -f "$DIST_DIR/金铲铲助手" ]]; then
+if [[ -f "$DIST_DIR/$APP_NAME" ]]; then
     log_info "打包成功 ✓"
-    log_info "产物位置: $DIST_DIR/金铲铲助手"
+    log_info "产物位置: $DIST_DIR/$APP_NAME"
 
     # 运行 smoke 测试
-    log_info "运行打包产物 smoke 测试..."
+    log_step "运行打包产物 smoke 测试..."
 
     # --help
-    "$DIST_DIR/金铲铲助手" --help > /dev/null && log_info "  --help ✓" || log_warn "  --help 失败"
+    "$DIST_DIR/$APP_NAME" --help > /dev/null && log_info "  --help ✓" || log_warn "  --help 失败"
 
     # --version
-    VERSION_OUTPUT=$("$DIST_DIR/金铲铲助手" --version 2>&1) && log_info "  --version: $VERSION_OUTPUT" || log_warn "  --version 失败"
+    VERSION_OUTPUT=$("$DIST_DIR/$APP_NAME" --version 2>&1) && log_info "  --version: $(echo "$VERSION_OUTPUT" | head -1)" || log_warn "  --version 失败"
 
-    # --platform mac --debug-window (允许失败，只检查能运行)
-    "$DIST_DIR/金铲铲助手" --platform mac --debug-window > /dev/null 2>&1 && log_info "  --debug-window ✓" || log_info "  --debug-window (预期失败，无窗口权限)"
+    # --capabilities (检查 flavor)
+    CAP_OUTPUT=$("$DIST_DIR/$APP_NAME" --capabilities 2>&1)
+    if echo "$CAP_OUTPUT" | grep -qi "$FLAVOR"; then
+        log_info "  --capabilities [$FLAVOR] ✓"
+    else
+        log_warn "  --capabilities flavor 不匹配"
+    fi
 
     log_info "打包完成！"
-    log_info "运行命令: $DIST_DIR/金铲铲助手 --help"
+    log_info "运行命令: $DIST_DIR/$APP_NAME --help"
 else
     log_error "打包失败，产物不存在"
     exit 1
