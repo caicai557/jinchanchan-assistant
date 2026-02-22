@@ -1,5 +1,5 @@
-# Windows PyInstaller 打包脚本 (PowerShell)
-# 用法: .\scripts\build_win.ps1 [-Clean]
+# Windows PyInstaller Build Script (PowerShell)
+# Usage: .\scripts\build_win.ps1 [-Clean]
 
 param(
     [switch]$Clean
@@ -17,33 +17,38 @@ function Log-Error { Write-Host "[ERROR] $args" -ForegroundColor Red }
 
 Set-Location $ProjectRoot
 
-# 清理旧构建
+# Clean old build
 if ($Clean) {
-    Log-Info "清理旧构建..."
+    Log-Info "Cleaning old build..."
     if (Test-Path $BuildDir) { Remove-Item -Recurse -Force $BuildDir }
     if (Test-Path $DistDir) { Remove-Item -Recurse -Force $DistDir }
 }
 
-# 检查虚拟环境
+# Check virtual environment
 $VenvPython = Join-Path $ProjectRoot "venv\Scripts\python.exe"
 if (-not (Test-Path $VenvPython)) {
-    Log-Error "虚拟环境不存在，请先运行: python -m venv venv && .\venv\Scripts\pip install -e .[dev,control,windows]"
+    Log-Error "Virtual environment not found."
+    Log-Error "Please run: python -m venv venv"
+    Log-Error "Then run: .\venv\Scripts\pip install -e .[dev,control,windows]"
     exit 1
 }
 
-# 安装 PyInstaller
-Log-Info "检查 PyInstaller..."
+# Install PyInstaller
+Log-Info "Checking PyInstaller..."
 & $VenvPython -m pip install "pyinstaller>=6.0.0" -q
 
-# 检查门禁
-Log-Info "运行门禁检查..."
-& $VenvPython -m ruff check . || { Log-Error "ruff check 失败"; exit 1 }
-& $VenvPython -m mypy . || { Log-Error "mypy 失败"; exit 1 }
-& $VenvPython -m pytest -q || { Log-Error "pytest 失败"; exit 1 }
-Log-Info "门禁通过 ✓"
+# Run lint checks
+Log-Info "Running lint checks..."
+& $VenvPython -m ruff check .
+if ($LASTEXITCODE -ne 0) { Log-Error "ruff check failed"; exit 1 }
+& $VenvPython -m mypy .
+if ($LASTEXITCODE -ne 0) { Log-Error "mypy failed"; exit 1 }
+& $VenvPython -m pytest -q
+if ($LASTEXITCODE -ne 0) { Log-Error "pytest failed"; exit 1 }
+Log-Info "Lint checks passed"
 
-# 运行 PyInstaller
-Log-Info "开始打包..."
+# Run PyInstaller
+Log-Info "Building with PyInstaller..."
 $TemplatesPath = "resources/templates;resources/templates"
 $GameDataPath = "resources/game_data;resources/game_data"
 $ConfigPath = "config/config.example.yaml;config"
@@ -80,30 +85,36 @@ $ConfigPath = "config/config.example.yaml;config"
     --noconfirm `
     main.py
 
-# 检查产物
+if ($LASTEXITCODE -ne 0) {
+    Log-Error "PyInstaller build failed"
+    exit 1
+}
+
+# Check output
 $ExePath = Join-Path $DistDir "jinchanchan-assistant.exe"
 if (Test-Path $ExePath) {
-    Log-Info "打包成功 ✓"
-    Log-Info "产物位置: $ExePath"
+    Log-Info "Build successful"
+    Log-Info "Output: $ExePath"
 
-    # 运行 smoke 测试
-    Log-Info "运行打包产物 smoke 测试..."
+    # Run smoke tests
+    Log-Info "Running smoke tests on build..."
 
     # --help
     & $ExePath --help | Out-Null
-    if ($LASTEXITCODE -eq 0) { Log-Info "  --help ✓" } else { Log-Warn "  --help 失败" }
+    if ($LASTEXITCODE -eq 0) { Log-Info "  --help OK" } else { Log-Warn "  --help failed" }
 
     # --version
     $VersionOutput = & $ExePath --version 2>&1
     Log-Info "  --version: $VersionOutput"
 
-    # --platform windows --dry-run (无设备时友好提示)
+    # --dry-run (friendly output without device)
     & $ExePath --platform windows --dry-run 2>&1 | Out-Null
-    Log-Info "  --dry-run 测试完成"
+    Log-Info "  --dry-run completed"
 
-    Log-Info "打包完成！"
-    Log-Info "运行命令: $ExePath --help"
-} else {
-    Log-Error "打包失败，产物不存在"
+    Log-Info "Build finished"
+    Log-Info "Run: $ExePath --help"
+}
+else {
+    Log-Error "Build failed, output not found"
     exit 1
 }

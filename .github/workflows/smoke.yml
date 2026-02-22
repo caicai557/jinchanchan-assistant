@@ -259,10 +259,13 @@ jobs:
             artifacts/replay/
           retention-days: 7
 
-  # Windows 构建
+  # Windows build
   build-windows:
     runs-on: windows-latest
     needs: [lint-and-test, windows-import-test]
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
     steps:
       - uses: actions/checkout@v4
 
@@ -271,22 +274,23 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        shell: bash
+        shell: pwsh
         run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           python -m venv venv
-          ./venv/Scripts/python -m pip install --upgrade pip
-          ./venv/Scripts/pip install -e ".[dev,windows,build]"
+          .\venv\Scripts\python -m pip install -e ".[dev,windows,build]"
 
       - name: Build with PyInstaller
-        shell: bash
+        shell: pwsh
         run: |
-          chmod +x scripts/build_win.ps1 || true
-          powershell -ExecutionPolicy Bypass -File scripts/build_win.ps1
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          .\scripts\build_win.ps1
 
       - name: Run product acceptance test
-        shell: powershell
+        shell: pwsh
         run: |
-          powershell -ExecutionPolicy Bypass -File scripts/smoke_dist_win.ps1 -SkipBuild
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          .\scripts\smoke_dist_win.ps1 -SkipBuild
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
