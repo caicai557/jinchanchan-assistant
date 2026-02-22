@@ -1,0 +1,114 @@
+name: Smoke Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Mac/Ubuntu 门禁测试 (Python 3.12)
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Create venv and install dependencies
+        run: |
+          python -m venv venv
+          ./venv/bin/pip install --upgrade pip
+          ./venv/bin/pip install -e ".[dev,control,ocr]"
+
+      - name: Ruff check
+        run: ./venv/bin/ruff check .
+
+      - name: Ruff format check
+        run: ./venv/bin/ruff format --check .
+
+      - name: Mypy type check
+        run: ./venv/bin/mypy .
+
+      - name: Run pytest
+        run: ./venv/bin/pytest -v
+
+  # Windows 模块导入验证 (无设备依赖)
+  windows-import-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Create venv and install dependencies
+        shell: bash
+        run: |
+          python -m venv venv
+          ./venv/Scripts/pip install --upgrade pip
+          ./venv/Scripts/pip install -e ".[dev,windows]"
+
+      - name: Verify Windows modules can be imported
+        shell: bash
+        run: |
+          ./venv/Scripts/python -c "
+          print('=== Windows 模块导入验证 ===')
+          from platforms.windows_emulator import WindowsEmulatorAdapter
+          print('✓ WindowsEmulatorAdapter')
+          from platforms.windows_emulator.adb_controller import ADBController
+          print('✓ ADBController')
+          print('Windows 模块验证通过')
+          "
+
+      - name: Run pytest (exclude Mac-specific tests)
+        shell: bash
+        run: ./venv/Scripts/python -m pytest -v --ignore=tests/test_debug_ui.py
+
+  # 模板完整性检查
+  template-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m venv venv
+          ./venv/bin/pip install -e ".[dev]"
+
+      - name: Validate S13 templates
+        run: |
+          ./venv/bin/python -c "
+          from pathlib import Path
+          from core.vision.template_registry import TemplateRegistry
+
+          # 检查 S13 导入目录
+          s13_dir = Path('resources/templates/s13_imported')
+          assert s13_dir.exists(), f'S13 导入目录不存在: {s13_dir}'
+
+          png_files = list(s13_dir.glob('*.png'))
+          print(f'S13 模板数量: {len(png_files)}')
+          assert len(png_files) == 99, f'预期 99 个模板，实际 {len(png_files)} 个'
+
+          # 检查映射文件
+          mapping_file = Path('resources/templates/s13_mapping.json')
+          assert mapping_file.exists(), f'映射文件不存在: {mapping_file}'
+
+          # 检查注册表
+          registry = TemplateRegistry()
+          count = registry.count_s13_imported()
+          print(f'注册表统计 S13 模板: {count}')
+          assert count == 99, f'注册表统计不匹配: {count}'
+
+          print('✓ 模板验证通过')
+          "
+
+      - name: Run recognition tests
+        run: ./venv/bin/pytest tests/test_recognition.py -v
