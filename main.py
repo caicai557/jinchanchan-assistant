@@ -164,6 +164,162 @@ class TUIState(TypedDict):
     action_queue: ActionQueue
 
 
+def run_doctor() -> int:
+    """
+    Run diagnostics and print troubleshooting suggestions
+
+    Returns:
+        0 if all checks pass, 1 if any issues found
+    """
+    import subprocess
+
+    print("=== Jinchanchan Assistant Doctor ===")
+    print()
+
+    issues = []
+
+    # 1. Platform check
+    print("[1/6] Platform")
+    print(f"  OS: {platform.system()}")
+    print(f"  Python: {platform.python_version()}")
+    print(f"  Architecture: {platform.machine()}")
+    print()
+
+    # 2. Platform adapter
+    print("[2/6] Platform Adapter")
+    if platform.system() == "Darwin":
+        try:
+            from Quartz import CGWindowListCopyWindowInfo  # noqa: F401
+
+            print("  [OK] Quartz available")
+        except ImportError:
+            print("  [FAIL] Quartz not available")
+            print("  FIX: pip install pyobjc-framework-Quartz")
+            issues.append("quartz")
+    elif platform.system() == "Windows":
+        # Check ADB
+        try:
+            result = subprocess.run(
+                ["adb", "version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                ver = result.stdout.split()
+                ver_str = ver[4] if len(ver) > 4 else "available"
+                print(f"  [OK] ADB: {ver_str}")
+            else:
+                print("  [FAIL] ADB not working")
+                print("  FIX: Install Android Platform Tools")
+                issues.append("adb")
+        except FileNotFoundError:
+            print("  [FAIL] ADB not found in PATH")
+            print("  FIX: Add ADB to PATH or install platform-tools")
+            issues.append("adb")
+        except Exception as e:
+            print(f"  [FAIL] ADB error: {e}")
+            issues.append("adb")
+    print()
+
+    # 3. Template registry
+    print("[3/6] Template Registry")
+    try:
+        from core.vision.template_registry import TemplateRegistry
+
+        registry = TemplateRegistry()
+        count = registry.load_from_registry_json()
+        s13_count = registry.count_s13_imported()
+        if count > 0:
+            print(f"  [OK] {count} templates loaded ({s13_count} S13)")
+        else:
+            print("  [WARN] No templates loaded")
+            print("  FIX: Check resources/templates/registry.json")
+    except Exception as e:
+        print(f"  [FAIL] {e}")
+        issues.append("templates")
+    print()
+
+    # 4. OCR backend
+    print("[4/6] OCR Backend")
+    try:
+        import rapidocr_onnxruntime  # noqa: F401
+
+        print("  [OK] RapidOCR available")
+    except ImportError:
+        print("  [WARN] RapidOCR not available")
+        print("  FIX: pip install rapidocr-onnxruntime (for Full flavor)")
+
+    try:
+        import pytesseract  # noqa: F401
+
+        print("  [OK] Tesseract available (fallback)")
+    except ImportError:
+        pass
+    print()
+
+    # 5. Template matching (OpenCV)
+    print("[5/6] Template Matching")
+    try:
+        import cv2  # noqa: F401
+
+        print(f"  [OK] OpenCV: {cv2.__version__}")
+    except ImportError:
+        print("  [WARN] OpenCV not available")
+        print("  FIX: pip install opencv-python-headless (for Full flavor)")
+    print()
+
+    # 6. Window/Device check
+    print("[6/6] Window/Device")
+    if platform.system() == "Darwin":
+        try:
+            from platforms.mac_playcover.window_manager import WindowManager
+
+            wm = WindowManager()
+            window = wm.find_game_window()
+            if window:
+                print(f"  [OK] Game window found")
+                print(f"       - {window.title} ({window.width}x{window.height})")
+            else:
+                print("  [WARN] No game windows found")
+                print("  FIX: Start the game first")
+        except Exception as e:
+            print(f"  [FAIL] {e}")
+            issues.append("window")
+    elif platform.system() == "Windows":
+        try:
+            result = subprocess.run(
+                ["adb", "devices"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            lines = result.stdout.strip().split("\n")
+            devices = [line.split()[0] for line in lines[1:] if line.strip() and "\tdevice" in line]
+            if devices:
+                print(f"  [OK] {len(devices)} device(s) connected")
+                for d in devices:
+                    print(f"       - {d}")
+            else:
+                print("  [WARN] No devices connected")
+                print("  FIX: Start emulator and run: adb connect 127.0.0.1:5555")
+        except Exception as e:
+            print(f"  [FAIL] {e}")
+            issues.append("device")
+    print()
+
+    # Summary
+    print("=" * 40)
+    if issues:
+        print(f"RESULT: ISSUES FOUND ({len(issues)})")
+        print("Please fix the issues above and run --doctor again.")
+        return 1
+    else:
+        print("RESULT: ALL CHECKS PASSED")
+        print("Ready to run!")
+        return 0
+
+
 # 配置日志
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("jinchanchan")
@@ -856,6 +1012,12 @@ async def main() -> int:
         default=None,
         help="Run self-test and generate replay_results.json",
     )
+    parser.add_argument(
+        "--doctor",
+        action="store_true",
+        default=False,
+        help="Run diagnostics and print troubleshooting suggestions",
+    )
 
     parser.add_argument("--platform", "-p", choices=["mac", "windows"], default="mac")
     parser.add_argument(
@@ -918,14 +1080,18 @@ async def main() -> int:
 
         return 0
 
-    # --self-test: 运行自检
+    # --self-test: Run self-test
     if args.self_test == "offline-replay":
         return await run_offline_replay_test_async()
+
+    # --doctor: Run diagnostics
+    if args.doctor:
+        return run_doctor()
 
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    # 窗口调试模式
+    # Debug window mode
     if args.debug_window:
         return debug_windows(
             platform=args.platform,
