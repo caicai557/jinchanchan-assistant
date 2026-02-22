@@ -67,6 +67,15 @@ build = [
     "pyinstaller>=6.0.0",
 ]
 
+full = [
+    # 模板匹配
+    "opencv-python-headless>=4.8.0",
+    "numpy>=1.24.0",
+
+    # OCR 后端
+    "rapidocr-onnxruntime>=1.2.0",
+]
+
 all = [
     "jinchanchan-assistant[control,ocr,llm,mac,windows]",
 ]

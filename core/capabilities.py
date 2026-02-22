@@ -413,29 +413,68 @@ class CapabilityMatrix:
         """
         检查 FULL flavor 的硬性要求
 
+        包括:
+        1. 可 import 关键依赖 (cv2, rapidocr_onnxruntime)
+        2. 模板文件数量 > 0 且可加载
+        3. OCR 后端可初始化
+
         Returns:
             (是否满足, 缺失列表)
         """
         missing = []
-        default_full = CapabilityResult("", CapabilityStatus.UNAVAILABLE, Flavor.FULL, "")
-        default_lite = CapabilityResult("", CapabilityStatus.UNAVAILABLE, Flavor.LITE, "")
 
-        # 模板匹配必须可用
-        tm = self._results.get("template_matching", default_full)
-        if tm.status != CapabilityStatus.AVAILABLE:
-            missing.append("template_matching")
+        # 1. 检查 cv2 可导入
+        try:
+            import cv2
 
-        # OCR 必须可用
-        ocr = self._results.get("ocr", default_full)
-        if ocr.status != CapabilityStatus.AVAILABLE:
-            missing.append("ocr")
+            _ = cv2.__version__
+        except ImportError:
+            missing.append("cv2_import")
 
-        # 平台适配必须可用
-        pa = self._results.get("platform_adapter", default_lite)
-        if pa.status != CapabilityStatus.AVAILABLE:
-            missing.append("platform_adapter")
+        # 2. 检查 rapidocr_onnxruntime 可导入
+        try:
+            from rapidocr_onnxruntime import RapidOCR
+
+            # 尝试初始化 OCR
+            _ = RapidOCR()
+        except ImportError:
+            missing.append("rapidocr_import")
+        except Exception as e:
+            missing.append(f"rapidocr_init:{str(e)[:30]}")
+
+        # 3. 检查模板文件数量 > 0 且可加载
+        try:
+            from core.vision.template_registry import TemplateRegistry
+
+            registry = TemplateRegistry()
+            count = registry.load_from_registry_json()
+            if count == 0:
+                missing.append("templates_empty")
+        except Exception as e:
+            missing.append(f"templates_load:{str(e)[:30]}")
+
+        # 4. 检查 numpy 可导入
+        try:
+            import numpy
+
+            _ = numpy.__version__
+        except ImportError:
+            missing.append("numpy_import")
 
         return len(missing) == 0, missing
+
+    def verify_full_dist_ready(self) -> tuple[bool, str]:
+        """
+        验证 dist 是否具备 Full 能力
+
+        Returns:
+            (是否就绪, 详细信息)
+        """
+        ready, missing = self.check_full_requirements()
+        if ready:
+            return True, "Full dist ready: all dependencies and assets available"
+        else:
+            return False, f"Full dist not ready: {', '.join(missing)}"
 
 
 def get_capability_matrix() -> CapabilityMatrix:

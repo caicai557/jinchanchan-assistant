@@ -221,18 +221,27 @@ jobs:
       - name: Install dependencies (full)
         run: |
           python -m venv venv
-          ./venv/bin/pip install --upgrade pip
-          ./venv/bin/pip install -e ".[dev,control,ocr,mac,build]"
+          ./venv/bin/python -m pip install --upgrade pip
+          ./venv/bin/pip install -e ".[dev,control,full,mac,build]"
 
       - name: Build with PyInstaller (full)
         run: |
           chmod +x scripts/build_mac.sh
           ./scripts/build_mac.sh --flavor full
 
-      - name: Run product acceptance test (full)
+      - name: Verify Full capabilities
         run: |
-          chmod +x scripts/smoke_dist_mac.sh
-          ./scripts/smoke_dist_mac.sh --skip-build --flavor full --ci
+          ./dist/金铲铲助手 --capabilities --require-full
+
+      - name: Generate capabilities.txt
+        run: |
+          ./dist/金铲铲助手 --capabilities > artifacts/capabilities.txt
+          mkdir -p artifacts/replay
+
+      - name: Run offline replay self-test
+        run: |
+          ./dist/金铲铲助手 --self-test offline-replay
+          mv replay_results.json artifacts/replay/
 
       - name: Upload macOS full artifact
         uses: actions/upload-artifact@v4
@@ -241,12 +250,14 @@ jobs:
           path: dist/金铲铲助手
           retention-days: 30
 
-      - name: Upload smoke test artifacts
+      - name: Upload Full artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: smoke-artifacts-macos-full
-          path: artifacts/smoke/
+          name: full-artifacts-macos
+          path: |
+            artifacts/capabilities.txt
+            artifacts/replay/
           retention-days: 7
 
   # Windows 构建

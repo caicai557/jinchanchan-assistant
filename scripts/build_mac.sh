@@ -60,13 +60,17 @@ fi
 
 # 检查虚拟环境
 if [[ ! -d "venv" ]]; then
-    log_error "虚拟环境不存在，请先运行: python -m venv venv && ./venv/bin/pip install -e .[dev,control,ocr,mac]"
+    log_error "虚拟环境不存在"
     exit 1
 fi
 
-# 安装 PyInstaller
-log_info "检查 PyInstaller..."
-./venv/bin/pip install "pyinstaller>=6.0.0" -q
+# 安装依赖
+log_step "安装依赖 ($FLAVOR)..."
+if [[ "$FLAVOR" == "full" ]]; then
+    ./venv/bin/pip install -e ".[dev,control,full,mac,build]" -q
+else
+    ./venv/bin/pip install -e ".[dev,control,mac,build]" -q
+fi
 
 # 检查门禁
 log_step "运行门禁检查..."
@@ -78,7 +82,6 @@ log_info "门禁通过 ✓"
 # 设置产物名称
 if [[ "$FLAVOR" == "lite" ]]; then
     APP_NAME="金铲铲助手-lite"
-    # Lite: 排除重依赖
     EXCLUDE_MODULES=(
         "--exclude-module" "cv2"
         "--exclude-module" "onnxruntime"
@@ -89,7 +92,6 @@ if [[ "$FLAVOR" == "lite" ]]; then
     )
 else
     APP_NAME="金铲铲助手"
-    # Full: 包含所有依赖
     EXCLUDE_MODULES=()
 fi
 
@@ -119,12 +121,14 @@ PYINSTALLER_CMD=(
     --collect-all "rich"
 )
 
-# 添加 Full flavor 的包含模块
+# Full flavor: 添加额外依赖
 if [[ "$FLAVOR" == "full" ]]; then
     PYINSTALLER_CMD+=(
         --hidden-import "cv2"
-        --hidden-import "numpy"
-        --collect-all "cv2"
+        --hidden-import "rapidocr_onnxruntime"
+        --hidden-import "onnxruntime"
+        --collect-all "rapidocr_onnxruntime"
+        --collect-all "onnxruntime"
     )
 fi
 
@@ -155,9 +159,9 @@ if [[ -f "$DIST_DIR/$APP_NAME" ]]; then
     # --version
     VERSION_OUTPUT=$("$DIST_DIR/$APP_NAME" --version 2>&1) && log_info "  --version: $(echo "$VERSION_OUTPUT" | head -1)" || log_warn "  --version 失败"
 
-    # --capabilities (检查 flavor)
+    # --capabilities
     CAP_OUTPUT=$("$DIST_DIR/$APP_NAME" --capabilities 2>&1)
-    if echo "$CAP_OUTPUT" | grep -qi "$FLAVOR"; then
+    if echo "$CAP_OUTPUT" | grep -qi "\[$FLAVOR\]"; then
         log_info "  --capabilities [$FLAVOR] ✓"
     else
         log_warn "  --capabilities flavor 不匹配"

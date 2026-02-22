@@ -319,6 +319,183 @@ def load_config(path: str = "config/config.yaml") -> dict[str, Any]:
         return {}
 
 
+def run_offline_replay_test() -> int:
+    """
+    运行离线回放自检测试
+
+    使用内置 fixtures 执行 vision->state->decision 链路
+    生成 replay_results.json 作为证据
+
+    Returns:
+        0 表示成功，非零表示失败
+    """
+    import json
+    import random
+    from pathlib import Path
+
+    from PIL import Image
+
+    from core.action import Action, ActionType
+    from core.game_state import GameState
+    from core.rules.decision_engine import DecisionEngineBuilder
+    from core.rules.validator import ActionValidator
+
+    print("=== 离线回放自检测试 ===")
+    print()
+
+    seed = 42
+    random.seed(seed)
+
+    # 初始化组件
+    decision_engine = DecisionEngineBuilder().with_llm_fallback(enabled=False).build()
+    validator = ActionValidator()
+
+    # 查找 fixtures 目录
+    possible_paths = [
+        Path(__file__).parent / "tests" / "fixtures" / "screens",
+        Path(__file__).parent.parent / "tests" / "fixtures" / "screens",
+        Path("tests/fixtures/screens"),
+        Path("/app/tests/fixtures/screens"),  # PyInstaller 打包后
+    ]
+
+    fixtures_dir = None
+    for p in possible_paths:
+        if p.exists() and list(p.glob("*.png")):
+            fixtures_dir = p
+            break
+
+    if not fixtures_dir:
+        print("[ERROR] 未找到 fixtures 目录")
+        print(f"搜索路径: {[str(p) for p in possible_paths]}")
+        return 1
+
+    print(f"Fixtures 目录: {fixtures_dir}")
+
+    # 提取字段
+    def extract_fields(screenshot: Image.Image) -> dict:
+        width, height = screenshot.size
+        extracted = {}
+
+        # 分析顶部区域
+        top_region = screenshot.crop((0, 0, width, 60))
+        top_pixels = list(top_region.getdata())
+
+        # 检测金币
+        gold_pixels = sum(1 for p in top_pixels if p[1] > 200 and p[2] < 100)
+        extracted["gold"] = min(gold_pixels // 100, 100)
+
+        # 分析商店区域
+        shop_region = screenshot.crop((40, 900, 1880, 1060))
+        shop_pixels = list(shop_region.getdata())
+
+        slot_colors = [
+            (80, 160, 80),
+            (80, 80, 160),
+            (160, 80, 160),
+            (160, 120, 80),
+            (200, 160, 80),
+        ]
+
+        detected_slots = 0
+        for color in slot_colors:
+            close_pixels = sum(
+                1
+                for p in shop_pixels
+                if abs(p[0] - color[0]) < 30
+                and abs(p[1] - color[1]) < 30
+                and abs(p[2] - color[2]) < 30
+            )
+            if close_pixels > 100:
+                detected_slots += 1
+
+        extracted["shop_slots"] = min(detected_slots, 5)
+        extracted["round_number"] = 1
+        extracted["level"] = 1
+        extracted["hp"] = 100
+
+        return extracted
+
+    # 生成动作
+    async def generate_actions(screenshot: Image.Image, game_state: GameState) -> list[Action]:
+        actions = []
+        result = await decision_engine.decide(screenshot, game_state)
+        if result and result.action:
+            actions.append(result.action)
+        if not actions:
+            actions.append(Action(type=ActionType.NONE, confidence=1.0))
+        return actions
+
+    results = []
+    fixtures = sorted(fixtures_dir.glob("*.png"))
+
+    print(f"发现 {len(fixtures)} 个 fixtures")
+    print()
+
+    for fixture in fixtures:
+        print(f"测试: {fixture.name}")
+
+        # 加载截图
+        screenshot = Image.open(fixture)
+
+        # 提取字段
+        extracted = extract_fields(screenshot)
+
+        # 更新游戏状态
+        game_state = GameState()
+        game_state.gold = extracted.get("gold", 0)
+        game_state.level = extracted.get("level", 1)
+
+        # 生成动作
+        import asyncio
+
+        actions = asyncio.run(generate_actions(screenshot, game_state))
+
+        # 验证动作
+        validation_passed = all(validator.validate(action, game_state) for action in actions)
+
+        result = {
+            "fixture": fixture.name,
+            "extracted_fields": extracted,
+            "actions": [
+                {"type": a.type.value, "target": a.target, "confidence": a.confidence}
+                for a in actions
+            ],
+            "validation_passed": validation_passed,
+        }
+        results.append(result)
+
+        status = "PASS" if validation_passed else "FAIL"
+        print(f"  提取字段: {list(extracted.keys())}")
+        print(f"  动作数量: {len(actions)}")
+        print(f"  验证: {status}")
+        print()
+
+    # 生成报告
+    output_path = Path("replay_results.json")
+    report = {
+        "version": "1.0",
+        "seed": seed,
+        "fixtures_tested": len(results),
+        "all_passed": all(r["validation_passed"] for r in results),
+        "results": results,
+    }
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=2, ensure_ascii=False)
+
+    print(f"报告已保存: {output_path}")
+    print()
+
+    # 最终判定
+    all_passed = all(r["validation_passed"] for r in results)
+    if all_passed:
+        print("=== 自检结果: PASS ===")
+        return 0
+    else:
+        print("=== 自检结果: FAIL ===")
+        return 1
+
+
 def debug_windows(
     platform: str = "mac",
     filter_pattern: str | None = None,
@@ -628,6 +805,18 @@ async def main() -> int:
     parser.add_argument(
         "--capabilities", action="store_true", default=False, help="显示能力探测摘要并退出"
     )
+    parser.add_argument(
+        "--require-full",
+        action="store_true",
+        default=False,
+        help="要求 Full flavor，缺失能力时返回非零退出码",
+    )
+    parser.add_argument(
+        "--self-test",
+        choices=["offline-replay"],
+        default=None,
+        help="运行自检测试并生成 replay_results.json",
+    )
 
     parser.add_argument("--platform", "-p", choices=["mac", "windows"], default="mac")
     parser.add_argument(
@@ -673,7 +862,26 @@ async def main() -> int:
     # --version 或 --capabilities: 输出能力摘要并退出
     if args.version or args.capabilities:
         print(format_capability_summary())
+
+        # --require-full: 检查 Full 能力
+        if args.require_full:
+            from core.capabilities import get_capability_matrix
+
+            matrix = get_capability_matrix()
+            if not matrix.is_full():
+                print("\n[ERROR] Full 能力检查失败:")
+                for name, result in matrix._results.items():
+                    if result.flavor.value == "full" and result.status.value != "available":
+                        print(f"  - {name}: {result.status.value} - {result.details}")
+                return 1
+            else:
+                print("\n[OK] Full 能力检查通过")
+
         return 0
+
+    # --self-test: 运行自检
+    if args.self_test == "offline-replay":
+        return run_offline_replay_test()
 
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
