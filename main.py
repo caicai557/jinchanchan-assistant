@@ -319,9 +319,9 @@ def load_config(path: str = "config/config.yaml") -> dict[str, Any]:
         return {}
 
 
-def run_offline_replay_test() -> int:
+async def run_offline_replay_test_async() -> int:
     """
-    运行离线回放自检测试
+    运行离线回放自检测试 (async 版本)
 
     使用内置 fixtures 执行 vision->state->decision 链路
     生成 replay_results.json 作为证据
@@ -415,16 +415,6 @@ def run_offline_replay_test() -> int:
 
         return extracted
 
-    # 生成动作
-    async def generate_actions(screenshot: Image.Image, game_state: GameState) -> list[Action]:
-        actions = []
-        result = await decision_engine.decide(screenshot, game_state)
-        if result and result.action:
-            actions.append(result.action)
-        if not actions:
-            actions.append(Action(type=ActionType.NONE, confidence=1.0))
-        return actions
-
     results = []
     fixtures = sorted(fixtures_dir.glob("*.png"))
 
@@ -445,15 +435,18 @@ def run_offline_replay_test() -> int:
         game_state.gold = extracted.get("gold", 0)
         game_state.level = extracted.get("level", 1)
 
-        # 生成动作
-        import asyncio
-
-        actions = asyncio.run(generate_actions(screenshot, game_state))
+        # 生成动作 (直接 await，不嵌套 asyncio.run)
+        actions = []
+        decision_result = await decision_engine.decide(screenshot, game_state)
+        if decision_result and decision_result.action:
+            actions.append(decision_result.action)
+        if not actions:
+            actions.append(Action(type=ActionType.NONE, confidence=1.0))
 
         # 验证动作
         validation_passed = all(validator.validate(action, game_state) for action in actions)
 
-        result = {
+        fixture_result = {
             "fixture": fixture.name,
             "extracted_fields": extracted,
             "actions": [
@@ -462,7 +455,7 @@ def run_offline_replay_test() -> int:
             ],
             "validation_passed": validation_passed,
         }
-        results.append(result)
+        results.append(fixture_result)
 
         status = "PASS" if validation_passed else "FAIL"
         print(f"  提取字段: {list(extracted.keys())}")
@@ -494,6 +487,21 @@ def run_offline_replay_test() -> int:
     else:
         print("=== 自检结果: FAIL ===")
         return 1
+
+
+def run_offline_replay_test() -> int:
+    """
+    运行离线回放自检测试 (同步入口)
+
+    使用内置 fixtures 执行 vision->state->decision 链路
+    生成 replay_results.json 作为证据
+
+    Returns:
+        0 表示成功，非零表示失败
+    """
+    import asyncio
+
+    return asyncio.run(run_offline_replay_test_async())
 
 
 def debug_windows(
@@ -881,7 +889,7 @@ async def main() -> int:
 
     # --self-test: 运行自检
     if args.self_test == "offline-replay":
-        return run_offline_replay_test()
+        return await run_offline_replay_test_async()
 
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)

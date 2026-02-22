@@ -51,7 +51,7 @@ mac = [
 ]
 
 windows = [
-    "adafruit-circuitpython-adb-shell>=1.0.0",
+    # 使用系统 adb (subprocess)，无需 Python 库
 ]
 
 dev = [
