@@ -49,8 +49,7 @@ jobs:
         shell: bash
         run: |
           python -m venv venv
-          ./venv/Scripts/pip install --upgrade pip
-          ./venv/Scripts/pip install -e ".[dev,windows]"
+          ./venv/Scripts/python -m pip install -e ".[dev,windows]"
 
       - name: Verify Windows modules can be imported
         shell: bash
@@ -235,8 +234,8 @@ jobs:
 
       - name: Generate capabilities.txt
         run: |
+          mkdir -p artifacts artifacts/replay
           ./dist/金铲铲助手 --capabilities > artifacts/capabilities.txt
-          mkdir -p artifacts/replay
 
       - name: Run offline replay self-test
         run: |
