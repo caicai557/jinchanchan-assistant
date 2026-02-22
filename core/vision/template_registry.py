@@ -369,6 +369,115 @@ class TemplateRegistry:
             "template_root": str(self.template_root),
         }
 
+    def validate_templates(self) -> dict[str, Any]:
+        """
+        校验所有注册的模板文件是否存在
+
+        Returns:
+            校验结果，包含 missing (缺失列表), existing (存在列表), stats (统计)
+        """
+        missing: list[dict[str, str]] = []
+        existing: list[dict[str, str]] = []
+
+        for key, entry in self._entries.items():
+            full_path = entry.get_full_path(self.template_root)
+            if full_path.exists():
+                existing.append(
+                    {
+                        "entity_type": entry.entity_type,
+                        "entity_id": entry.entity_id,
+                        "path": str(entry.template_path),
+                    }
+                )
+            else:
+                missing.append(
+                    {
+                        "entity_type": entry.entity_type,
+                        "entity_id": entry.entity_id,
+                        "path": str(entry.template_path),
+                    }
+                )
+
+        return {
+            "missing": missing,
+            "existing": existing,
+            "stats": {
+                "total": len(self._entries),
+                "missing_count": len(missing),
+                "existing_count": len(existing),
+                "missing_by_type": self._count_by_type(missing),
+            },
+        }
+
+    def _count_by_type(self, items: list[dict[str, str]]) -> dict[str, int]:
+        """按类型统计"""
+        counts: dict[str, int] = {}
+        for item in items:
+            t = item["entity_type"]
+            counts[t] = counts.get(t, 0) + 1
+        return counts
+
+    def check_template_exists(self, entity_type: str, entity_name: str) -> bool:
+        """
+        检查单个模板是否存在
+
+        Args:
+            entity_type: 实体类型
+            entity_name: 实体名称
+
+        Returns:
+            是否存在
+        """
+        path = self.get_template_path(entity_type, entity_name)
+        return path is not None and path.exists()
+
+    def get_missing_templates_message(self) -> str | None:
+        """
+        获取缺失模板的可读报错信息
+
+        Returns:
+            报错信息字符串，如果没有缺失则返回 None
+        """
+        result = self.validate_templates()
+        missing = result["missing"]
+
+        if not missing:
+            return None
+
+        lines = [f"⚠️ 缺失 {len(missing)} 个模板文件:"]
+
+        # 按类型分组
+        by_type: dict[str, list[dict[str, str]]] = {}
+        for item in missing:
+            t = item["entity_type"]
+            if t not in by_type:
+                by_type[t] = []
+            by_type[t].append(item)
+
+        for entity_type, items in by_type.items():
+            lines.append(f"\n[{entity_type}] {len(items)} 个:")
+            for item in items[:5]:  # 只显示前5个
+                lines.append(f"  - {item['entity_id']}: {item['path']}")
+            if len(items) > 5:
+                lines.append(f"  ... 还有 {len(items) - 5} 个")
+
+        lines.append(f"\n模板根目录: {self.template_root}")
+        lines.append("请检查模板文件是否已导入到正确位置")
+
+        return "\n".join(lines)
+
+    def count_s13_imported(self) -> int:
+        """
+        统计 s13_imported 目录中的模板数量
+
+        Returns:
+            模板数量
+        """
+        s13_dir = self.template_root / "s13_imported"
+        if not s13_dir.exists():
+            return 0
+        return len(list(s13_dir.glob("*.png")))
+
     @staticmethod
     def _normalize_text(text: str) -> str:
         """规范化文本（去除空格、转小写）"""

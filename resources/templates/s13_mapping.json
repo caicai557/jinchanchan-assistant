@@ -1,0 +1,136 @@
+{
+  "version": "S13",
+  "description": "S13福星版本模板映射表 - 从时间戳文件名映射到语义名称",
+  "source": "/Users/cai/cai-code/jinchanchan/S13_extracted/S13福星版本模拟器专用/script/image/",
+  "total_images": 99,
+  "mapping": {
+    "heroes": {
+      "cost1": [
+        {"original": "1737021495.png", "name": "索拉卡", "english": "soraka"},
+        {"original": "1737021736.png", "name": "斯维因", "english": "swain"}
+      ],
+      "cost2": [
+        {"original": "1737021562.png", "name": "锤石", "english": "thresh"},
+        {"original": "1737021765.png", "name": "李青", "english": "leesin"}
+      ],
+      "cost3": [
+        {"original": "1732243877.png", "name": "金克丝", "english": "jinx"},
+        {"original": "1737021608.png", "name": "德莱文", "english": "draven"},
+        {"original": "1737022202.png", "name": "奇亚娜", "english": "qiyana"},
+        {"original": "1737024754.png", "name": "贝蕾亚", "english": "briar"},
+        {"original": "1737025929.png", "name": "奇亚娜_2", "english": "qiyana_alt"},
+        {"original": "1737041626.png", "name": "娑娜", "english": "sona"}
+      ],
+      "cost4": [
+        {"original": "1732243546.png", "name": "塞薇卡", "english": "sevika"},
+        {"original": "1732243637.png", "name": "杰斯", "english": "jayce"},
+        {"original": "1732243652.png", "name": "乐芙兰", "english": "leblanc"},
+        {"original": "1732243668.png", "name": "凯特琳", "english": "caitlyn"},
+        {"original": "1732243686.png", "name": "莫德凯撒", "english": "mordekaiser"},
+        {"original": "1732243710.png", "name": "玛尔扎哈", "english": "malzahar"},
+        {"original": "1732243735.png", "name": "兰博", "english": "rumble"},
+        {"original": "1734004523.png", "name": "沃里克", "english": "warwick"},
+        {"original": "1734004763.png", "name": "维克托", "english": "viktor"},
+        {"original": "1734005114.png", "name": "维克托_2", "english": "viktor_alt"},
+        {"original": "1734005299.png", "name": "厄加特", "english": "urgot"}
+      ],
+      "cost5": [
+        {"original": "1737021542.png", "name": "永恩", "english": "yone"},
+        {"original": "1737021634.png", "name": "瑟提", "english": "sett"},
+        {"original": "1737021680.png", "name": "阿兹尔", "english": "azir"},
+        {"original": "1737021701.png", "name": "奥恩", "english": "ornn"},
+        {"original": "1737039318.png", "name": "费德提克", "english": "fiddlesticks"}
+      ],
+      "unclassified": [
+        {"original": "1734004488.png", "name": "梅尔", "english": "mel"},
+        {"original": "1734004782.png", "name": "梅尔_2", "english": "mel_alt"},
+        {"original": "1734004885.png", "name": "沃里克_2", "english": "warwick_alt"},
+        {"original": "1732244773.png", "name": "未知英雄1", "english": "unknown_hero_1"},
+        {"original": "1732245718.png", "name": "未知英雄2", "english": "unknown_hero_2"},
+        {"original": "1737022892.png", "name": "敌法师", "english": "antimage"}
+      ]
+    },
+    "items": {
+      "base": [
+        {"original": "1718605014.png", "name": "锁子甲", "english": "chain_vest"},
+        {"original": "1732242591.png", "name": "法力药水", "english": "mana_potion"},
+        {"original": "1732242682.png", "name": "药水", "english": "flask"},
+        {"original": "1732242736.png", "name": "书籍", "english": "book"},
+        {"original": "1732243089.png", "name": "力量", "english": "dumbbell"},
+        {"original": "1732243114.png", "name": "战士护盾", "english": "warrior_shield"},
+        {"original": "1732243212.png", "name": "战士徽章", "english": "warrior_badge"},
+        {"original": "1732243248.png", "name": "天平", "english": "scales"},
+        {"original": "1737022493.png", "name": "皇冠", "english": "crown"},
+        {"original": "1737023276.png", "name": "月之碎片", "english": "moon_shard"},
+        {"original": "1737041682.png", "name": "音符", "english": "music_note"}
+      ],
+      "combined": [
+        {"original": "1737022437.png", "name": "阿哈利姆神杖", "english": "aghanim_shard"}
+      ]
+    },
+    "synergies": [
+      {"original": "1718605014.png", "name": "秘术", "english": "mystic"},
+      {"original": "1732243142.png", "name": "帝国", "english": "imperial"},
+      {"original": "1732244906.png", "name": "星象", "english": "star_sign"},
+      {"original": "1732245433.png", "name": "星辰", "english": "star"},
+      {"original": "1732245627.png", "name": "符文", "english": "rune"},
+      {"original": "1737022313.png", "name": "三角", "english": "triad"},
+      {"original": "1737022356.png", "name": "交叉武器", "english": "crossed_weapons"},
+      {"original": "1737022387.png", "name": "莲花", "english": "lotus"},
+      {"original": "1737022413.png", "name": "虚空", "english": "void"},
+      {"original": "1737022524.png", "name": "天选", "english": "chosen"},
+      {"original": "1737022947.png", "name": "皇冠", "english": "crown"},
+      {"original": "1737023159.png", "name": "未知羁绊1", "english": "unknown_syn_1"},
+      {"original": "1737023193.png", "name": "狙击手", "english": "sniper"},
+      {"original": "1737023224.png", "name": "触发", "english": "on_reveal"}
+    ],
+    "buttons": [
+      {"original": "1718605173.png", "name": "已满", "english": "full"},
+      {"original": "1718605189.png", "name": "不足", "english": "insufficient"},
+      {"original": "1718605266.png", "name": "点赞", "english": "like"},
+      {"original": "1718605711.png", "name": "数字4", "english": "number_4"},
+      {"original": "1718606255.png", "name": "数字5", "english": "number_5"},
+      {"original": "1718609290.png", "name": "接受", "english": "accept"},
+      {"original": "1727410008.png", "name": "锁定", "english": "lock"},
+      {"original": "1737023247.png", "name": "开", "english": "open"},
+      {"original": "1737023314.png", "name": "卑尔维斯", "english": "belveth"},
+      {"original": "1737043399.png", "name": "彗星", "english": "comet"},
+      {"original": "1737043456.png", "name": "彗星2", "english": "comet_alt"},
+      {"original": "1737084790.png", "name": "不能", "english": "cannot"}
+    ],
+    "unclassified": [
+      "1732242188.png",
+      "1732242357.png",
+      "1732242464.png",
+      "1732242525.png",
+      "1732242796.png",
+      "1732244969.png",
+      "1732245048.png",
+      "1732245141.png",
+      "1732245213.png",
+      "1732245488.png",
+      "1732245554.png",
+      "1737022549.png",
+      "1737022573.png",
+      "1737022603.png",
+      "1737022626.png",
+      "1737022665.png",
+      "1737022699.png",
+      "1737022734.png",
+      "1737022835.png",
+      "1737022860.png",
+      "1737022980.png",
+      "1737023025.png",
+      "1737023068.png",
+      "1737023618.png",
+      "1737024727.png",
+      "1737040859.png"
+    ]
+  },
+  "notes": [
+    "图片识别基于 AI 视觉分析，部分结果可能不准确",
+    "未分类图片可能是低分辨率或无法识别的内容",
+    "建议人工复核关键模板",
+    "英雄费用分类基于视觉估计，需与游戏数据交叉验证"
+  ]
+}

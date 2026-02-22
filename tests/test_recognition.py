@@ -492,3 +492,186 @@ class TestRecognitionIntegration:
         assert count == 2
         assert new_registry.get_template_path("hero", "亚索") is not None
         assert new_registry.get_template_path("item", "暴风大剑") is not None
+
+
+# === 模板存在性校验测试 ===
+
+
+class TestTemplateValidation:
+    """模板存在性校验测试"""
+
+    def test_validate_templates(self, tmp_path: Path) -> None:
+        """校验模板文件存在性"""
+        registry = TemplateRegistry(template_root=tmp_path)
+
+        # 注册一个条目
+        registry.register(
+            TemplateEntry(
+                entity_type="hero",
+                entity_id="测试英雄",
+                template_path=Path("heroes/test.png"),
+                ocr_variants=["测试英雄"],
+            )
+        )
+
+        # 创建模板文件
+        (tmp_path / "heroes").mkdir(parents=True)
+        (tmp_path / "heroes" / "test.png").touch()
+
+        result = registry.validate_templates()
+
+        assert result["stats"]["total"] == 1
+        assert result["stats"]["existing_count"] == 1
+        assert result["stats"]["missing_count"] == 0
+
+    def test_validate_missing_templates(self, tmp_path: Path) -> None:
+        """校验缺失的模板"""
+        registry = TemplateRegistry(template_root=tmp_path)
+
+        # 注册但不创建文件
+        registry.register(
+            TemplateEntry(
+                entity_type="hero",
+                entity_id="缺失英雄",
+                template_path=Path("heroes/missing.png"),
+                ocr_variants=["缺失英雄"],
+            )
+        )
+
+        result = registry.validate_templates()
+
+        assert result["stats"]["missing_count"] == 1
+        assert len(result["missing"]) == 1
+        assert result["missing"][0]["entity_id"] == "缺失英雄"
+
+    def test_check_template_exists(self, tmp_path: Path) -> None:
+        """检查单个模板存在"""
+        registry = TemplateRegistry(template_root=tmp_path)
+
+        # 注册并创建
+        registry.register(
+            TemplateEntry(
+                entity_type="hero",
+                entity_id="存在英雄",
+                template_path=Path("heroes/exists.png"),
+                ocr_variants=["存在英雄"],
+            )
+        )
+        (tmp_path / "heroes").mkdir(parents=True)
+        (tmp_path / "heroes" / "exists.png").touch()
+
+        assert registry.check_template_exists("hero", "存在英雄") is True
+        assert registry.check_template_exists("hero", "不存在") is False
+
+    def test_get_missing_templates_message(self, tmp_path: Path) -> None:
+        """获取缺失模板报错信息"""
+        registry = TemplateRegistry(template_root=tmp_path)
+
+        # 注册但不创建文件
+        registry.register(
+            TemplateEntry(
+                entity_type="hero",
+                entity_id="缺失英雄",
+                template_path=Path("heroes/missing.png"),
+                ocr_variants=["缺失英雄"],
+            )
+        )
+
+        message = registry.get_missing_templates_message()
+
+        assert message is not None
+        assert "缺失 1 个模板文件" in message
+        assert "缺失英雄" in message
+
+    def test_get_missing_templates_message_none_when_all_exist(self, tmp_path: Path) -> None:
+        """全部存在时返回 None"""
+        registry = TemplateRegistry(template_root=tmp_path)
+
+        registry.register(
+            TemplateEntry(
+                entity_type="hero",
+                entity_id="存在英雄",
+                template_path=Path("heroes/exists.png"),
+                ocr_variants=["存在英雄"],
+            )
+        )
+        (tmp_path / "heroes").mkdir(parents=True)
+        (tmp_path / "heroes" / "exists.png").touch()
+
+        message = registry.get_missing_templates_message()
+
+        assert message is None
+
+
+# === S13 模板导入验证 ===
+
+
+class TestS13TemplateImport:
+    """S13 模板导入验证测试"""
+
+    def test_s13_imported_directory_exists(self) -> None:
+        """S13 导入目录存在"""
+        from core.vision.template_registry import TEMPLATE_ROOT
+
+        s13_dir = TEMPLATE_ROOT / "s13_imported"
+        assert s13_dir.exists(), f"S13 导入目录不存在: {s13_dir}"
+
+    def test_s13_template_count(self) -> None:
+        """S13 模板数量大于 0"""
+        from core.vision.template_registry import TEMPLATE_ROOT
+
+        s13_dir = TEMPLATE_ROOT / "s13_imported"
+        if s13_dir.exists():
+            count = len(list(s13_dir.glob("*.png")))
+            assert count > 0, "S13 导入目录中没有 PNG 文件"
+            assert count == 99, f"预期 99 个模板，实际 {count} 个"
+
+    def test_s13_mapping_file_exists(self) -> None:
+        """S13 映射文件存在"""
+        from core.vision.template_registry import TEMPLATE_ROOT
+
+        mapping_file = TEMPLATE_ROOT / "s13_mapping.json"
+        assert mapping_file.exists(), f"S13 映射文件不存在: {mapping_file}"
+
+    def test_s13_mapping_valid_json(self) -> None:
+        """S13 映射文件是有效 JSON"""
+        import json
+
+        from core.vision.template_registry import TEMPLATE_ROOT
+
+        mapping_file = TEMPLATE_ROOT / "s13_mapping.json"
+        with open(mapping_file, encoding="utf-8") as f:
+            data = json.load(f)
+
+        assert "version" in data
+        assert "mapping" in data
+        assert data["total_images"] == 99
+
+    def test_registry_count_s13_imported(self) -> None:
+        """统计 S13 导入模板数量"""
+        registry = TemplateRegistry()
+        count = registry.count_s13_imported()
+
+        assert count == 99, f"预期 99 个 S13 导入模板，实际 {count} 个"
+
+    def test_template_directories_structure(self) -> None:
+        """模板目录结构正确"""
+        from core.vision.template_registry import TEMPLATE_ROOT
+
+        required_dirs = [
+            "heroes/cost1",
+            "heroes/cost2",
+            "heroes/cost3",
+            "heroes/cost4",
+            "heroes/cost5",
+            "items/base",
+            "items/combined",
+            "synergies",
+            "buttons",
+            "s13_imported",
+        ]
+
+        for dir_path in required_dirs:
+            full_path = TEMPLATE_ROOT / dir_path
+            assert full_path.exists(), f"模板目录不存在: {full_path}"
+            assert full_path.is_dir(), f"不是目录: {full_path}"
