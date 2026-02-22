@@ -106,7 +106,7 @@ PYINSTALLER_CMD=(
     --add-data "resources/templates:resources/templates"
     --add-data "resources/game_data:resources/game_data"
     --add-data "config/config.example.yaml:config"
-    --hidden-import "pyyaml"
+    --hidden-import "yaml"
     --hidden-import "PIL"
     --hidden-import "pydantic"
     --hidden-import "mss"

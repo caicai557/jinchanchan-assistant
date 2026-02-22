@@ -35,7 +35,7 @@ if (-not (Test-Path $VenvPython)) {
 
 # Install PyInstaller
 Log-Info "Checking PyInstaller..."
-& $VenvPython -m pip install "pyinstaller>=6.0.0" -q
+& $VenvPython -m pip install "pyinstaller>=6.0.0" "pyyaml" -q
 
 # Run lint checks
 Log-Info "Running lint checks..."
@@ -60,7 +60,7 @@ $ConfigPath = "config/config.example.yaml;config"
     --add-data $TemplatesPath `
     --add-data $GameDataPath `
     --add-data $ConfigPath `
-    --hidden-import "pyyaml" `
+    --hidden-import "yaml" `
     --hidden-import "PIL" `
     --hidden-import "pydantic" `
     --hidden-import "mss" `
