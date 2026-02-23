@@ -38,6 +38,7 @@ if IS_MACOS:
             kCGMouseButtonLeft,
             kCGMouseButtonRight,
             kCGWindowImageDefault,
+            kCGWindowListOptionIncludingWindow,
             kCGWindowListOptionOnScreenOnly,
         )
 
@@ -114,6 +115,22 @@ class MacPlayCoverAdapter(BasePlatformAdapter):
 
         return self._window_info
 
+    def get_screenshot(self) -> Image.Image:
+        """获取游戏窗口截图（按窗口 ID 捕获，不受遮挡影响）"""
+        info = self.get_window_info()
+        if info is None or info.window_id is None:
+            raise RuntimeError(f"未找到游戏窗口: {self.window_title}")
+
+        image_ref = CGWindowListCreateImage(
+            CGRectNull,
+            kCGWindowListOptionIncludingWindow,
+            info.window_id,
+            kCGWindowImageDefault,
+        )
+        if image_ref is None:
+            raise RuntimeError("窗口截图失败")
+        return self._cgimage_to_pil(image_ref)
+
     def _capture_impl(self, rect: tuple[int, int, int, int]) -> Image.Image:
         """
         截图实现
@@ -167,32 +184,14 @@ class MacPlayCoverAdapter(BasePlatformAdapter):
         """将 CGImage 转换为 PIL Image"""
         width = Quartz.CGImageGetWidth(image_ref)
         height = Quartz.CGImageGetHeight(image_ref)
+        bpr = Quartz.CGImageGetBytesPerRow(image_ref)
 
-        # 获取像素数据
-        color_space = Quartz.CGColorSpaceCreateDeviceRGB()
-        bitmap_info = Quartz.kCGBitmapByteOrder32Little | Quartz.kCGImageAlphaNoneSkipFirst
+        provider = Quartz.CGImageGetDataProvider(image_ref)
+        raw = Quartz.CGDataProviderCopyData(provider)
+        buf = bytes(raw)
 
-        context = Quartz.CGBitmapContextCreate(None, width, height, 8, 0, color_space, bitmap_info)
-
-        if context is None:
-            raise RuntimeError("无法创建位图上下文")
-
-        Quartz.CGContextDrawImage(context, CGRectNull, image_ref)
-
-        # 获取原始数据
-        data = Quartz.CGBitmapContextGetData(context)
-
-        if data is None:
-            raise RuntimeError("无法获取图像数据")
-
-        # 转换为 bytes
-        import ctypes
-
-        buffer_size = width * height * 4
-        buffer = ctypes.string_at(data, buffer_size)
-
-        # 转换为 PIL Image
-        image = Image.frombytes("RGBA", (width, height), buffer, "raw", "BGRA")
+        # stride 参数处理行填充 (bpr 可能 > width*4)
+        image = Image.frombytes("RGBA", (width, height), buf, "raw", "BGRA", bpr, 1)
         return image.convert("RGB")
 
     def _click_impl(self, x: int, y: int, button: str = "left") -> bool:
@@ -204,6 +203,9 @@ class MacPlayCoverAdapter(BasePlatformAdapter):
             y: Y 坐标
             button: 鼠标按钮
         """
+        # 确保游戏窗口在前台
+        self.activate_game()
+        time.sleep(0.05)
         # 映射按钮
         button_map = {
             "left": (kCGMouseButtonLeft, kCGEventLeftMouseDown, kCGEventLeftMouseUp),

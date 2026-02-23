@@ -79,6 +79,12 @@ class RecognitionEngine:
         self.template_threshold = template_threshold
         self.ocr_confidence_threshold = ocr_confidence_threshold
 
+    def _update_scaler(self, screenshot: Image.Image) -> None:
+        """根据截图实际尺寸更新缩放器"""
+        w, h = screenshot.size
+        if (w, h) != (self.scaler.target.width, self.scaler.target.height):
+            self.scaler = CoordinateScaler.from_window_size(w, h)
+
     def recognize_shop(
         self,
         screenshot: Image.Image,
@@ -95,6 +101,8 @@ class RecognitionEngine:
             识别结果列表（5个元素，空槽位返回 None）
         """
         from core.vision.regions import GameRegions
+
+        self._update_scaler(screenshot)
 
         if shop_regions is None:
             shop_regions = GameRegions.all_shop_slots()
@@ -264,6 +272,8 @@ class RecognitionEngine:
         """
         from core.vision.regions import GameRegions
 
+        self._update_scaler(screenshot)
+
         if bench_regions is None:
             bench_regions = GameRegions.all_bench_slots()
 
@@ -280,6 +290,26 @@ class RecognitionEngine:
             results.append(entity)
 
         return results
+
+    def recognize_player_info(
+        self,
+        screenshot: Image.Image,
+    ) -> dict[str, int | None]:
+        """识别金币和等级数字"""
+        from core.vision.regions import GameRegions
+
+        self._update_scaler(screenshot)
+        result: dict[str, int | None] = {"gold": None, "level": None}
+
+        regions = [("gold", GameRegions.GOLD_DISPLAY), ("level", GameRegions.LEVEL_DISPLAY)]
+        for key, region in regions:
+            scaled = region.scale(self.scaler)
+            crop = screenshot.crop(scaled.bbox)
+            # 小图放大 3x 提高 OCR 识别率
+            big = crop.resize((crop.width * 3, crop.height * 3), Image.LANCZOS)
+            result[key] = self.ocr.recognize_number(big)
+
+        return result
 
     def _recognize_in_region(
         self,

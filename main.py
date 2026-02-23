@@ -21,10 +21,11 @@ import yaml
 from core.action import ActionType
 from core.action_queue import ActionQueue
 from core.control.action_executor import ActionExecutor
-from core.game_state import GameState
+from core.game_state import GamePhase, GameState
 from core.llm.client import LLMClient, LLMConfig, LLMProvider
 from core.protocols import PlatformAdapter
 from core.rules.decision_engine import DecisionEngineBuilder
+from core.vision.recognition_engine import create_recognition_engine
 
 
 def get_version() -> str:
@@ -387,6 +388,10 @@ class JinchanchanAssistant:
 
         # 初始化动作执行器
         self.executor = ActionExecutor(self.adapter)
+        self.executor.auto_detect_resolution()
+
+        # 初始化识别引擎
+        self.recognition_engine = create_recognition_engine()
 
         # 状态
         self._running = False
@@ -423,7 +428,29 @@ class JinchanchanAssistant:
             screenshot = self.adapter.get_screenshot()
             logger.debug("获取截图成功")
 
-            # 2. 决策
+            # 2. 视觉识别 → 更新游戏状态
+            try:
+                shop = self.recognition_engine.recognize_shop(screenshot)
+                bench = self.recognition_engine.recognize_bench(screenshot)
+                self._game_state.update_from_recognition(
+                    shop_entities=shop,
+                    bench_entities=bench,
+                )
+                recognized = sum(1 for s in shop if s is not None)
+                if recognized:
+                    logger.debug(f"识别到 {recognized} 个商店英雄")
+                    self._game_state.phase = GamePhase.PREPARATION
+
+                # OCR 读取金币/等级
+                info = self.recognition_engine.recognize_player_info(screenshot)
+                if info["gold"] is not None:
+                    self._game_state.gold = info["gold"]
+                if info["level"] is not None:
+                    self._game_state.level = info["level"]
+            except Exception as e:
+                logger.debug(f"识别跳过: {e}")
+
+            # 3. 决策
             result = await self.decision_engine.decide(
                 screenshot=screenshot, game_state=self._game_state, priority="balanced"
             )

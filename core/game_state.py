@@ -27,7 +27,7 @@ class Hero(BaseModel):
     """英雄信息"""
 
     name: str = Field(..., description="英雄名称")
-    cost: int = Field(..., ge=1, le=5, description="费用 1-5")
+    cost: int = Field(..., ge=0, le=5, description="费用 0=未知, 1-5")
     stars: int = Field(default=1, ge=1, le=3, description="星级 1-3")
     level: int = Field(default=1, ge=1, description="等级")
     synergies: list[str] = Field(default_factory=list, description="羁绊列表")

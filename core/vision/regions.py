@@ -255,22 +255,22 @@ class GameRegions:
         height=100,
     )
 
-    # 金币显示区域
+    # 金币显示区域（底部，购买经验/刷新按钮右侧）
     GOLD_DISPLAY = UIRegion(
         name="gold_display",
-        x=1740,
-        y=20,
-        width=80,
-        height=30,
+        x=565,
+        y=805,
+        width=60,
+        height=40,
     )
 
-    # 等级显示区域
+    # 等级显示区域（底部，购买经验按钮上方）
     LEVEL_DISPLAY = UIRegion(
         name="level_display",
-        x=1740,
-        y=55,
-        width=80,
-        height=30,
+        x=300,
+        y=790,
+        width=100,
+        height=45,
     )
 
 

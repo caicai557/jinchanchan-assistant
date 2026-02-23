@@ -34,12 +34,12 @@ class ActionExecutor:
 
     # 参考分辨率 (1920x1080) 下的坐标配置
     _REFERENCE_COORDS: dict[str, Any] = {
-        # 商店槽位 (5个)
-        "shop_slots": [(180, 950), (340, 950), (500, 950), (660, 950), (820, 950)],
+        # 商店槽位 (5个) — 与 GameRegions 对齐
+        "shop_slots": [(380, 1000), (670, 1000), (960, 1000), (1250, 1000), (1540, 1000)],
         # 刷新按钮
-        "refresh_button": (920, 950),
+        "refresh_button": (200, 1000),
         # 购买经验按钮
-        "level_up_button": (1000, 950),
+        "level_up_button": (200, 930),
         # 棋盘位置 (4行7列，左上角)
         "board_origin": (200, 400),
         "board_cell_size": (80, 80),
