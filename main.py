@@ -209,6 +209,8 @@ def run_doctor() -> int:
     """
     import subprocess
 
+    from core.vision.regions import GameRegions
+
     print("=== Jinchanchan Assistant Doctor ===")
     print()
 
@@ -307,6 +309,7 @@ def run_doctor() -> int:
 
     # 6. Window/Device check
     print("[6/6] Window/Device")
+    doctor_transform = GameRegions.create_transform(GameRegions.BASE_SIZE)
     if platform.system() == "Darwin":
         try:
             from platforms.mac_playcover.window_manager import WindowManager
@@ -316,6 +319,7 @@ def run_doctor() -> int:
             if window:
                 print("  [OK] Game window found")
                 print(f"       - {window.title} ({window.width}x{window.height})")
+                doctor_transform = GameRegions.create_transform((window.width, window.height))
             else:
                 print("  [WARN] No game windows found")
                 print("  FIX: Start the game first")
@@ -342,6 +346,18 @@ def run_doctor() -> int:
         except Exception as e:
             print(f"  [FAIL] {e}")
             issues.append("device")
+    diag = doctor_transform.diagnostics()
+    scale_x, scale_y = doctor_transform.scale
+    offset = doctor_transform.offset
+    content_rect = doctor_transform.content_rect_or_full()
+    print(
+        "  [INFO] Transform:"
+        f" base={diag['base_size']}"
+        f" current={diag['current_size']}"
+        f" scale=({scale_x:.4f}, {scale_y:.4f})"
+        f" offset={offset}"
+        f" content_rect={content_rect}"
+    )
     print()
 
     # Summary

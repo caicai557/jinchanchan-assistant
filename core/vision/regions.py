@@ -1,12 +1,17 @@
 """
 UI 区域定义
 
-定义 1920x1080 参考分辨率下的游戏 UI 区域，运行时通过 CoordinateScaler 缩放
+定义 1920x1080 参考分辨率下的游戏 UI 区域，运行时通过统一 CoordinateTransform 映射
 """
 
 from dataclasses import dataclass
+from typing import Protocol
 
-from core.coordinate_scaler import CoordinateScaler
+from core.geometry.transform import CoordinateTransform
+
+
+class _RectMapper(Protocol):
+    def map_rect(self, x: int, y: int, width: int, height: int) -> tuple[int, int, int, int]: ...
 
 
 @dataclass(frozen=True)
@@ -29,9 +34,9 @@ class UIRegion:
         """获取中心点"""
         return (self.x + self.width // 2, self.y + self.height // 2)
 
-    def scale(self, scaler: CoordinateScaler) -> "UIRegion":
-        """缩放到目标分辨率"""
-        sx, sy, sw, sh = scaler.scale_rect(self.x, self.y, self.width, self.height)
+    def scale(self, scaler: _RectMapper) -> "UIRegion":
+        """缩放到目标分辨率（兼容 CoordinateScaler / CoordinateTransform）"""
+        sx, sy, sw, sh = scaler.map_rect(self.x, self.y, self.width, self.height)
         return UIRegion(name=self.name, x=sx, y=sy, width=sw, height=sh)
 
 
@@ -41,6 +46,8 @@ class GameRegions:
 
     所有坐标基于 1920x1080 参考分辨率
     """
+
+    BASE_SIZE = (1920, 1080)
 
     # === 商店区域 ===
     # 商店位于屏幕底部，5 个槽位
@@ -273,14 +280,27 @@ class GameRegions:
         height=45,
     )
 
+    @classmethod
+    def create_transform(
+        cls,
+        current_size: tuple[int, int],
+        content_rect: tuple[int, int, int, int] | None = None,
+    ) -> CoordinateTransform:
+        """创建基于游戏 UI 基准分辨率的统一坐标映射。"""
+        return CoordinateTransform(
+            base_size=cls.BASE_SIZE,
+            current_size=current_size,
+            content_rect=content_rect,
+        )
 
-def scale_regions(regions: list[UIRegion], scaler: CoordinateScaler) -> list[UIRegion]:
+
+def scale_regions(regions: list[UIRegion], scaler: _RectMapper) -> list[UIRegion]:
     """
     批量缩放区域
 
     Args:
         regions: UI 区域列表
-        scaler: 坐标缩放器
+        scaler: 坐标映射器（CoordinateScaler / CoordinateTransform）
 
     Returns:
         缩放后的区域列表

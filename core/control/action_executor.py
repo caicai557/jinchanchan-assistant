@@ -11,8 +11,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from core.action import Action, ActionType
-from core.coordinate_scaler import CoordinateScaler, Resolution
+from core.coordinate_scaler import Resolution
+from core.geometry.transform import CoordinateTransform
 from core.protocols import PlatformAdapter
+from core.vision.regions import GameRegions
 
 
 @dataclass
@@ -34,8 +36,8 @@ class ActionExecutor:
 
     # 参考分辨率 (1920x1080) 下的坐标配置
     _REFERENCE_COORDS: dict[str, Any] = {
-        # 商店槽位 (5个) — 与 GameRegions 对齐
-        "shop_slots": [(380, 1000), (670, 1000), (960, 1000), (1250, 1000), (1540, 1000)],
+        # 商店槽位 (5个) — 使用区域中心，保证 ROI/点击同源
+        "shop_slots": [GameRegions.shop_slot(i).center for i in range(5)],
         # 刷新按钮
         "refresh_button": (200, 1000),
         # 购买经验按钮
@@ -44,7 +46,7 @@ class ActionExecutor:
         "board_origin": (200, 400),
         "board_cell_size": (80, 80),
         # 备战席 (9个槽位)
-        "bench_slots": [(200 + i * 80, 820) for i in range(9)],
+        "bench_slots": [GameRegions.bench_slot(i).center for i in range(9)],
     }
 
     def __init__(
@@ -70,9 +72,17 @@ class ActionExecutor:
         self.humanize = humanize
         self.random_delay_range = random_delay_range
 
-        # 坐标缩放器
-        self._scaler = CoordinateScaler(resolution)
-        self._coord_config = self._scale_coords(self._scaler)
+        # 统一坐标变换（点击坐标基于窗口大小，而非截图像素大小）
+        target_size = (
+            (resolution.width, resolution.height)
+            if resolution is not None
+            else GameRegions.BASE_SIZE
+        )
+        self._transform = GameRegions.create_transform(
+            current_size=target_size,
+            content_rect=(0, 0, target_size[0], target_size[1]),
+        )
+        self._coord_config = self._scale_coords(self._transform)
 
         # 执行统计
         self._stats = {
@@ -81,27 +91,57 @@ class ActionExecutor:
             "failed_actions": 0,
         }
 
-    def _scale_coords(self, scaler: CoordinateScaler) -> dict[str, Any]:
-        """根据缩放器计算目标分辨率的坐标"""
+    def _scale_coords(self, transform: CoordinateTransform) -> dict[str, Any]:
+        """根据统一坐标变换计算目标分辨率的坐标"""
+        shop_slots = [transform.map_point(x, y) for x, y in self._REFERENCE_COORDS["shop_slots"]]
+        bench_slots = [transform.map_point(x, y) for x, y in self._REFERENCE_COORDS["bench_slots"]]
         return {
-            "shop_slots": scaler.scale_points(self._REFERENCE_COORDS["shop_slots"]),
-            "refresh_button": scaler.scale_point(*self._REFERENCE_COORDS["refresh_button"]),
-            "level_up_button": scaler.scale_point(*self._REFERENCE_COORDS["level_up_button"]),
-            "board_origin": scaler.scale_point(*self._REFERENCE_COORDS["board_origin"]),
-            "board_cell_size": scaler.scale_size(*self._REFERENCE_COORDS["board_cell_size"]),
-            "bench_slots": scaler.scale_points(self._REFERENCE_COORDS["bench_slots"]),
+            "shop_slots": shop_slots,
+            "refresh_button": transform.map_point(*self._REFERENCE_COORDS["refresh_button"]),
+            "level_up_button": transform.map_point(*self._REFERENCE_COORDS["level_up_button"]),
+            "board_origin": transform.map_point(*self._REFERENCE_COORDS["board_origin"]),
+            "board_cell_size": transform.map_size(*self._REFERENCE_COORDS["board_cell_size"]),
+            "bench_slots": bench_slots,
         }
 
-    def update_resolution(self, width: int, height: int) -> None:
+    def update_resolution(
+        self,
+        width: int,
+        height: int,
+        content_rect: tuple[int, int, int, int] | None = None,
+    ) -> None:
         """
         更新目标分辨率并重新计算坐标
 
         Args:
             width: 窗口宽度
             height: 窗口高度
+            content_rect: 内容区矩形（支持 letterbox）
         """
-        self._scaler = CoordinateScaler.from_window_size(width, height)
-        self._coord_config = self._scale_coords(self._scaler)
+        self._transform = GameRegions.create_transform((width, height), content_rect=content_rect)
+        self._coord_config = self._scale_coords(self._transform)
+
+    def _get_adapter_content_rect(
+        self, width: int, height: int
+    ) -> tuple[int, int, int, int] | None:
+        """从平台适配器读取内容区信息（如果有）。"""
+        getter = getattr(self.adapter, "get_content_rect", None)
+        if not callable(getter):
+            return None
+        try:
+            rect = getter()
+        except TypeError:
+            try:
+                rect = getter((width, height))
+            except Exception:
+                return None
+        except Exception:
+            return None
+        if not rect:
+            return None
+        if not isinstance(rect, tuple) or len(rect) != 4:
+            return None
+        return rect
 
     def auto_detect_resolution(self) -> tuple[int, int]:
         """
@@ -112,7 +152,8 @@ class ActionExecutor:
         """
         window_info = self.adapter.get_window_info()
         if window_info:
-            self.update_resolution(window_info.width, window_info.height)
+            content_rect = self._get_adapter_content_rect(window_info.width, window_info.height)
+            self.update_resolution(window_info.width, window_info.height, content_rect=content_rect)
             return (window_info.width, window_info.height)
         return (1920, 1080)
 
@@ -358,3 +399,7 @@ class ActionExecutor:
     def get_stats(self) -> dict[str, int]:
         """获取执行统计"""
         return self._stats.copy()
+
+    def get_transform_diagnostics(self) -> dict[str, object]:
+        """返回当前点击坐标映射诊断信息。"""
+        return self._transform.diagnostics()

@@ -6,6 +6,8 @@
 
 from dataclasses import dataclass
 
+from core.geometry.transform import CoordinateTransform
+
 
 @dataclass
 class Resolution:
@@ -45,8 +47,13 @@ class CoordinateScaler:
             target: 目标分辨率，None 时使用参考分辨率
         """
         self.target = target or self.REFERENCE
-        self._scale_x = self.target.width / self.REFERENCE.width
-        self._scale_y = self.target.height / self.REFERENCE.height
+        self._transform = CoordinateTransform(
+            base_size=(self.REFERENCE.width, self.REFERENCE.height),
+            current_size=(self.target.width, self.target.height),
+            # CoordinateScaler 保持历史行为：默认不做 letterbox 推断，直接整窗缩放
+            content_rect=(0, 0, self.target.width, self.target.height),
+        )
+        self._scale_x, self._scale_y = self._transform.scale
 
     @classmethod
     def from_window_size(cls, width: int, height: int) -> "CoordinateScaler":
@@ -64,7 +71,11 @@ class CoordinateScaler:
         Returns:
             目标分辨率下的 (x, y)
         """
-        return (int(x * self._scale_x), int(y * self._scale_y))
+        return self._transform.map_point(x, y)
+
+    def map_point(self, x: int, y: int) -> tuple[int, int]:
+        """兼容统一 transform API。"""
+        return self.scale_point(x, y)
 
     def scale_size(self, width: int, height: int) -> tuple[int, int]:
         """
@@ -77,7 +88,7 @@ class CoordinateScaler:
         Returns:
             目标分辨率下的 (width, height)
         """
-        return (int(width * self._scale_x), int(height * self._scale_y))
+        return self._transform.map_size(width, height)
 
     def scale_rect(self, x: int, y: int, width: int, height: int) -> tuple[int, int, int, int]:
         """
@@ -90,9 +101,11 @@ class CoordinateScaler:
         Returns:
             目标分辨率下的 (x, y, width, height)
         """
-        sx, sy = self.scale_point(x, y)
-        sw, sh = self.scale_size(width, height)
-        return (sx, sy, sw, sh)
+        return self._transform.map_rect(x, y, width, height)
+
+    def map_rect(self, x: int, y: int, width: int, height: int) -> tuple[int, int, int, int]:
+        """兼容统一 transform API。"""
+        return self.scale_rect(x, y, width, height)
 
     def scale_points(self, points: list[tuple[int, int]]) -> list[tuple[int, int]]:
         """
@@ -116,6 +129,11 @@ class CoordinateScaler:
         return self.target.width == self.REFERENCE.width and (
             self.target.height == self.REFERENCE.height
         )
+
+    @property
+    def transform(self) -> CoordinateTransform:
+        """返回底层统一坐标变换。"""
+        return self._transform
 
 
 # 预定义分辨率配置
