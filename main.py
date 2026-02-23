@@ -10,6 +10,8 @@ import logging
 import os
 import platform
 import sys
+import time
+from collections import deque
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -377,6 +379,30 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger("jinchanchan")
 
 
+def configure_file_logging(log_file: str) -> Path:
+    """强制追加文件日志（artifacts 证据）。"""
+    log_path = Path(log_file)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    root_logger = logging.getLogger()
+    resolved = log_path.resolve()
+    for handler in root_logger.handlers:
+        if isinstance(handler, logging.FileHandler):
+            try:
+                if Path(handler.baseFilename).resolve() == resolved:
+                    return log_path
+            except Exception:
+                continue
+
+    file_handler = logging.FileHandler(log_path, encoding="utf-8")
+    file_handler.setLevel(root_logger.level)
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    )
+    root_logger.addHandler(file_handler)
+    return log_path
+
+
 class JinchanchanAssistant:
     """
     金铲铲助手主类
@@ -390,11 +416,19 @@ class JinchanchanAssistant:
         llm_client: LLMClient | None = None,
         decision_interval: float = 2.0,
         dry_run: bool = False,
+        max_actions_per_min: int | None = None,
+        max_clicks: int | None = None,
+        timeout: float | None = None,
+        llm_budget: int | None = None,
     ):
         self.adapter = platform_adapter
         self.llm_client = llm_client
         self.decision_interval = decision_interval
         self.dry_run = dry_run
+        self.max_actions_per_min = max_actions_per_min
+        self.max_clicks = max_clicks
+        self.timeout = timeout
+        self.llm_budget = llm_budget
 
         # 初始化决策引擎
         engine_builder = DecisionEngineBuilder()
@@ -412,18 +446,26 @@ class JinchanchanAssistant:
         # 状态
         self._running = False
         self._game_state = GameState()
+        self._session_started_monotonic = time.monotonic()
+        self._timeout_warning_emitted = False
+        self._action_timestamps: deque[float] = deque()
+        self._click_count = 0
+        self._recognition_warning_every = 5
 
         # 统计
         self._stats = {
             "total_decisions": 0,
             "actions_executed": 0,
             "errors": 0,
+            "recognition_errors": 0,
+            "safety_blocks": 0,
         }
 
     async def run(self) -> None:
         """运行助手"""
         logger.info("金铲铲助手启动")
         self._running = True
+        self._session_started_monotonic = time.monotonic()
 
         try:
             while self._running:
@@ -437,34 +479,142 @@ class JinchanchanAssistant:
             self._running = False
             self._print_stats()
 
+    def _check_timeout(self) -> bool:
+        """检查运行超时；超时时停止主循环。"""
+        if self.timeout is None or self.timeout <= 0:
+            return False
+
+        elapsed = time.monotonic() - self._session_started_monotonic
+        if elapsed < self.timeout:
+            return False
+
+        if not self._timeout_warning_emitted:
+            self._timeout_warning_emitted = True
+            logger.warning(
+                "达到运行超时上限，停止运行: elapsed=%.1fs timeout=%.1fs",
+                elapsed,
+                self.timeout,
+            )
+        self._running = False
+        return True
+
+    def _run_recognition_step(self, screenshot: Any) -> dict[str, int | None]:
+        """执行识别并写回 game_state，返回用于日志的关键字段。"""
+        fields: dict[str, int | None] = {
+            "gold": None,
+            "level": None,
+            "shop_count": None,
+        }
+        try:
+            # 点击坐标按窗口尺寸刷新，识别坐标按截图尺寸在 recognition_engine 内部更新
+            self.executor.auto_detect_resolution()
+
+            shop = self.recognition_engine.recognize_shop(screenshot)
+            bench = self.recognition_engine.recognize_bench(screenshot)
+            self._game_state.update_from_recognition(
+                shop_entities=shop,
+                bench_entities=bench,
+            )
+            recognized = sum(1 for s in shop if s is not None)
+            fields["shop_count"] = recognized
+            if recognized:
+                logger.debug("识别到 %d 个商店英雄", recognized)
+                self._game_state.phase = GamePhase.PREPARATION
+
+            info = self.recognition_engine.recognize_player_info(screenshot)
+            fields["gold"] = info.get("gold")
+            fields["level"] = info.get("level")
+            if fields["gold"] is not None:
+                self._game_state.gold = fields["gold"]
+            if fields["level"] is not None:
+                self._game_state.level = fields["level"]
+        except Exception as e:
+            self._stats["recognition_errors"] += 1
+            count = self._stats["recognition_errors"]
+            if count % self._recognition_warning_every == 0:
+                logger.warning("识别异常已累计 %d 次，最近一次: %s", count, e)
+            else:
+                logger.debug("识别跳过(%d): %s", count, e)
+        return fields
+
+    def _log_loop_observation(
+        self,
+        screenshot: Any,
+        recognition_fields: dict[str, int | None],
+        action_type: str,
+    ) -> None:
+        """记录每轮关键观测信息，便于 live 回归。"""
+        scale_x = scale_y = 1.0
+        offset = (0, 0)
+        try:
+            transform = self.recognition_engine.transform
+            scale_x, scale_y = transform.scale
+            offset = transform.offset
+        except Exception:
+            pass
+
+        logger.info(
+            (
+                "loop window_size=%sx%s scale=(%.4f,%.4f) offset=%s "
+                "gold=%s level=%s shop_count=%s action=%s"
+            ),
+            getattr(screenshot, "width", "?"),
+            getattr(screenshot, "height", "?"),
+            scale_x,
+            scale_y,
+            offset,
+            recognition_fields.get("gold"),
+            recognition_fields.get("level"),
+            recognition_fields.get("shop_count"),
+            action_type,
+        )
+
+    def _can_execute_live_action(self) -> tuple[bool, str | None]:
+        """检查 live 模式安全闸。"""
+        if self.dry_run:
+            return (True, None)
+
+        now = time.monotonic()
+        if self.max_actions_per_min is not None and self.max_actions_per_min > 0:
+            while self._action_timestamps and (now - self._action_timestamps[0]) > 60:
+                self._action_timestamps.popleft()
+            if len(self._action_timestamps) >= self.max_actions_per_min:
+                return (
+                    False,
+                    (
+                        "触发速率限制: "
+                        f"{len(self._action_timestamps)}/{self.max_actions_per_min} actions/min"
+                    ),
+                )
+
+        if (
+            self.max_clicks is not None
+            and self.max_clicks > 0
+            and self._click_count >= self.max_clicks
+        ):
+            return (False, f"触发点击上限: {self._click_count}/{self.max_clicks}")
+
+        return (True, None)
+
+    def _record_live_action_execution(self) -> None:
+        """记录 live 模式动作执行计数。"""
+        if self.dry_run:
+            return
+        self._action_timestamps.append(time.monotonic())
+        self._click_count += 1
+
     async def _game_loop(self) -> None:
         """游戏主循环"""
         try:
+            if self._check_timeout():
+                return
+
             # 1. 获取游戏截图
             screenshot = self.adapter.get_screenshot()
             logger.debug("获取截图成功")
 
             # 2. 视觉识别 → 更新游戏状态
-            try:
-                shop = self.recognition_engine.recognize_shop(screenshot)
-                bench = self.recognition_engine.recognize_bench(screenshot)
-                self._game_state.update_from_recognition(
-                    shop_entities=shop,
-                    bench_entities=bench,
-                )
-                recognized = sum(1 for s in shop if s is not None)
-                if recognized:
-                    logger.debug(f"识别到 {recognized} 个商店英雄")
-                    self._game_state.phase = GamePhase.PREPARATION
-
-                # OCR 读取金币/等级
-                info = self.recognition_engine.recognize_player_info(screenshot)
-                if info["gold"] is not None:
-                    self._game_state.gold = info["gold"]
-                if info["level"] is not None:
-                    self._game_state.level = info["level"]
-            except Exception as e:
-                logger.debug(f"识别跳过: {e}")
+            recognition_fields = self._run_recognition_step(screenshot)
 
             # 3. 决策
             result = await self.decision_engine.decide(
@@ -472,6 +622,7 @@ class JinchanchanAssistant:
             )
 
             self._stats["total_decisions"] += 1
+            self._log_loop_observation(screenshot, recognition_fields, result.action.type.value)
             logger.info(
                 f"决策结果: {result.action.type.value} "
                 f"(来源: {result.source}, 置信度: {result.confidence:.2f})"
@@ -482,6 +633,13 @@ class JinchanchanAssistant:
                 if self.dry_run:
                     logger.info(f"[dry-run] 跳过执行: {result.action.type.value}")
                 else:
+                    allowed, reason = self._can_execute_live_action()
+                    if not allowed:
+                        self._stats["safety_blocks"] += 1
+                        logger.warning("安全闸阻止动作 %s: %s", result.action.type.value, reason)
+                        return
+
+                    self._record_live_action_execution()
                     exec_result = await self.executor.execute(result.action)
 
                     if exec_result.success:
@@ -491,6 +649,9 @@ class JinchanchanAssistant:
                         logger.warning(f"执行失败: {exec_result.error}")
 
                     await asyncio.sleep(0.5)
+            else:
+                # NONE 也要有每轮日志，已在 _log_loop_observation 输出
+                pass
 
         except Exception as e:
             self._stats["errors"] += 1
@@ -506,6 +667,9 @@ class JinchanchanAssistant:
         logger.info(f"总决策次数: {self._stats['total_decisions']}")
         logger.info(f"执行动作次数: {self._stats['actions_executed']}")
         logger.info(f"错误次数: {self._stats['errors']}")
+        logger.info(f"识别异常次数: {self._stats['recognition_errors']}")
+        logger.info(f"安全闸阻止次数: {self._stats['safety_blocks']}")
+        logger.info(f"点击计数: {self._click_count}")
 
         decision_stats = self.decision_engine.get_stats()
         logger.info(f"规则决策: {decision_stats.get('rule_decisions', 0)}")
@@ -854,6 +1018,9 @@ def run_tui(
     dry_run: bool,
     interval: float,
     budget: int,
+    max_actions_per_min: int | None = None,
+    max_clicks: int | None = None,
+    timeout: float | None = None,
 ) -> int:
     """
     运行 TUI 界面
@@ -864,6 +1031,9 @@ def run_tui(
         dry_run: 是否只读模式
         interval: 决策间隔
         budget: LLM 预算
+        max_actions_per_min: 每分钟动作上限（live）
+        max_clicks: 点击上限（live）
+        timeout: 运行超时（秒）
 
     Returns:
         退出码
@@ -889,6 +1059,10 @@ def run_tui(
         llm_client=llm_client,
         decision_interval=interval,
         dry_run=dry_run,
+        max_actions_per_min=max_actions_per_min,
+        max_clicks=max_clicks,
+        timeout=timeout,
+        llm_budget=budget,
     )
 
     # 存储最新截图和识别结果
@@ -916,6 +1090,8 @@ def run_tui(
         table.add_row("决策", str(stats["total_decisions"]))
         table.add_row("执行", str(stats["actions_executed"]))
         table.add_row("错误", str(stats["errors"]))
+        table.add_row("识别异常", str(stats["recognition_errors"]))
+        table.add_row("安全闸", str(stats["safety_blocks"]))
         table.add_row("规则", str(engine_stats.get("rule_decisions", 0)))
         table.add_row("LLM", str(engine_stats.get("llm_decisions", 0)))
         table.add_row("Budget", f"{llm_calls}/{budget}")
@@ -1012,9 +1188,15 @@ def run_tui(
     async def game_loop_with_screenshot() -> None:
         """带截图保存的游戏循环"""
         try:
+            if assistant._check_timeout():
+                return
+
             # 获取截图
             screenshot = adapter.get_screenshot()
             state["last_screenshot"] = screenshot
+
+            # 识别并更新状态
+            recognition_fields = assistant._run_recognition_step(screenshot)
 
             # 决策
             result = await assistant.decision_engine.decide(
@@ -1030,6 +1212,11 @@ def run_tui(
             state["last_source"] = result.source
             state["last_confidence"] = result.confidence
 
+            assistant._log_loop_observation(
+                screenshot,
+                recognition_fields,
+                result.action.type.value,
+            )
             logger.info(
                 f"决策: {result.action.type.value} (来源: {result.source}, "
                 f"置信度: {result.confidence:.2f})"
@@ -1045,6 +1232,14 @@ def run_tui(
                     logger.info(f"[dry-run] 跳过: {result.action.type.value}")
                     queue.complete_current(success=True)
                 else:
+                    allowed, reason = assistant._can_execute_live_action()
+                    if not allowed:
+                        assistant._stats["safety_blocks"] += 1
+                        logger.warning("安全闸阻止动作 %s: %s", result.action.type.value, reason)
+                        queue.complete_current(success=False, error=reason)
+                        return
+
+                    assistant._record_live_action_execution()
                     # 取出并执行
                     to_execute = queue.dequeue()
                     if to_execute:
@@ -1070,6 +1265,7 @@ def run_tui(
         console.print(f"[cyan]dry_run={dry_run} budget={budget}[/cyan]")
 
         assistant._running = True
+        assistant._session_started_monotonic = time.monotonic()
         try:
             with Live(build_ui(), console=console, refresh_per_second=2, screen=True):
                 while assistant._running:
@@ -1126,6 +1322,10 @@ async def main() -> int:
     parser.add_argument("--llm-budget", type=int, default=None)
     parser.add_argument("--llm-log", action="store_true", default=False)
     parser.add_argument("--dry-run", action="store_true", default=False)
+    parser.add_argument("--max-actions-per-min", type=int, default=None)
+    parser.add_argument("--max-clicks", type=int, default=None)
+    parser.add_argument("--timeout", type=float, default=None, help="Session timeout in seconds")
+    parser.add_argument("--log-file", default="artifacts/local/run.log")
     parser.add_argument("--interval", "-i", type=float, default=2.0)
     parser.add_argument("--verbose", "-v", action="store_true")
     parser.add_argument("--config", default="config/config.yaml")
@@ -1154,6 +1354,9 @@ async def main() -> int:
     )
 
     args = parser.parse_args()
+
+    log_path = configure_file_logging(args.log_file)
+    logger.info("日志落盘路径: %s", log_path)
 
     # --version 或 --capabilities: 输出能力摘要并退出
     if args.version or args.capabilities:
@@ -1210,6 +1413,20 @@ async def main() -> int:
         else int(llm_cfg.get("budget_per_session", 50))
     )
     enable_log = args.llm_log or llm_cfg.get("enable_logging", False)
+    max_actions_per_min = args.max_actions_per_min if args.max_actions_per_min is not None else None
+    max_clicks = args.max_clicks if args.max_clicks is not None else None
+    session_timeout = args.timeout if args.timeout is not None else None
+
+    if not args.dry_run:
+        if max_actions_per_min is None:
+            max_actions_per_min = 30
+        if max_clicks is None:
+            max_clicks = 300
+        if session_timeout is None:
+            session_timeout = 300.0
+        if provider != "none" and budget <= 0:
+            logger.error("live 模式要求启用 LLM 预算，当前 --llm-budget=%s", budget)
+            return 1
 
     # 创建平台适配器
     try:
@@ -1230,13 +1447,20 @@ async def main() -> int:
 
     # 启动摘要（不含敏感信息）
     logger.info(
-        "启动摘要: provider=%s model=%s timeout=%.1f budget=%d dry_run=%s ui=%s",
+        (
+            "启动摘要: provider=%s model=%s llm_timeout=%.1f budget=%d dry_run=%s ui=%s "
+            "max_actions_per_min=%s max_clicks=%s session_timeout=%s log_file=%s"
+        ),
         provider,
         model or "(default)",
         timeout,
         budget,
         args.dry_run,
         args.ui,
+        max_actions_per_min,
+        max_clicks,
+        session_timeout,
+        args.log_file,
     )
 
     # 能力探测摘要
@@ -1251,6 +1475,9 @@ async def main() -> int:
             dry_run=args.dry_run,
             interval=args.interval,
             budget=budget,
+            max_actions_per_min=max_actions_per_min,
+            max_clicks=max_clicks,
+            timeout=session_timeout,
         )
 
     assistant = JinchanchanAssistant(
@@ -1258,6 +1485,10 @@ async def main() -> int:
         llm_client=llm_client,
         decision_interval=args.interval,
         dry_run=args.dry_run,
+        max_actions_per_min=max_actions_per_min,
+        max_clicks=max_clicks,
+        timeout=session_timeout,
+        llm_budget=budget,
     )
 
     await assistant.run()
