@@ -26,8 +26,43 @@ from core.llm.client import LLMClient, LLMConfig, LLMProvider
 from core.protocols import PlatformAdapter
 from core.rules.decision_engine import DecisionEngineBuilder
 
-# Version
-__version__ = "0.1.0"
+
+def get_version() -> str:
+    """Get version from git tag or fallback to pyproject"""
+    import subprocess
+
+    # Try git describe --tags
+    try:
+        result = subprocess.run(
+            ["git", "describe", "--tags", "--abbrev=0"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip().lstrip("v")
+    except Exception:
+        pass
+
+    # Fallback to pyproject.toml
+    try:
+        import tomllib
+
+        pyproject_path = Path(__file__).parent / "pyproject.toml"
+        if pyproject_path.exists():
+            with open(pyproject_path, "rb") as f:
+                data = tomllib.load(f)
+                project = data.get("project", {})
+                version = project.get("version", "0.1.0")
+                return str(version)
+    except Exception:
+        pass
+
+    return "0.1.0"
+
+
+# Version (read from git tag or pyproject.toml)
+__version__ = get_version()
 
 
 def setup_console_encoding() -> None:

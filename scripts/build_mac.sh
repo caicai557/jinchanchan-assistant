@@ -64,6 +64,10 @@ if [[ ! -d "venv" ]]; then
     exit 1
 fi
 
+# 打印 Python 版本
+log_info "Python 版本:"
+./venv/bin/python --version
+
 # 安装依赖
 log_step "安装依赖 ($FLAVOR)..."
 if [[ "$FLAVOR" == "full" ]]; then
