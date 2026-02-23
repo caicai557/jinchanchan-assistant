@@ -11,6 +11,7 @@ from pathlib import Path
 from PIL import Image
 
 from core.coordinate_scaler import CoordinateScaler
+from core.geometry.transform import CoordinateTransform
 from core.vision.ocr_engine import OCREngine
 from core.vision.regions import UIRegion
 from core.vision.template_matcher import TemplateMatcher
@@ -76,14 +77,65 @@ class RecognitionEngine:
         self.matcher = matcher
         self.ocr = ocr
         self.scaler = scaler or CoordinateScaler()
+        self.transform = self._make_transform_from_scaler(self.scaler)
         self.template_threshold = template_threshold
         self.ocr_confidence_threshold = ocr_confidence_threshold
 
-    def _update_scaler(self, screenshot: Image.Image) -> None:
-        """根据截图实际尺寸更新缩放器"""
+    def _make_transform_from_scaler(self, scaler: CoordinateScaler) -> CoordinateTransform:
+        """兼容旧接口：从 CoordinateScaler 构造统一坐标变换。"""
+        if hasattr(scaler, "transform"):
+            return scaler.transform
+
+        return CoordinateTransform(
+            base_size=(CoordinateScaler.REFERENCE.width, CoordinateScaler.REFERENCE.height),
+            current_size=(scaler.target.width, scaler.target.height),
+            content_rect=(0, 0, scaler.target.width, scaler.target.height),
+        )
+
+    def _update_transform(self, screenshot: Image.Image) -> None:
+        """根据截图实际尺寸更新统一坐标映射。"""
+        from core.vision.regions import GameRegions
+
         w, h = screenshot.size
-        if (w, h) != (self.scaler.target.width, self.scaler.target.height):
+        if (w, h) != self.transform.current_size:
+            self.transform = GameRegions.create_transform((w, h))
             self.scaler = CoordinateScaler.from_window_size(w, h)
+
+    def _update_scaler(self, screenshot: Image.Image) -> None:
+        """兼容旧调用名。"""
+        self._update_transform(screenshot)
+
+    def _map_region(self, base_region: UIRegion) -> UIRegion:
+        """将基准区域映射到当前截图坐标。"""
+        return base_region.scale(self.transform)
+
+    def _normalize_crop_to_base(self, cropped: Image.Image, base_region: UIRegion) -> Image.Image:
+        """将当前 ROI 统一缩放回基准区域尺寸，提升模板/OCR一致性。"""
+        target_size = (base_region.width, base_region.height)
+        if cropped.size == target_size:
+            return cropped
+        return cropped.resize(target_size, Image.LANCZOS)
+
+    def _map_local_bbox_to_global(
+        self,
+        local_bbox: tuple[int, int, int, int],
+        current_region: UIRegion,
+        base_region: UIRegion,
+    ) -> tuple[int, int, int, int]:
+        """将基准 ROI 内局部 bbox 映射回当前截图全局坐标。"""
+        local_transform = CoordinateTransform(
+            base_size=(base_region.width, base_region.height),
+            current_size=(current_region.width, current_region.height),
+            content_rect=(0, 0, current_region.width, current_region.height),
+        )
+        x1, y1 = local_transform.map_point((local_bbox[0], local_bbox[1]))
+        x2, y2 = local_transform.map_point((local_bbox[2], local_bbox[3]))
+        return (
+            current_region.x + x1,
+            current_region.y + y1,
+            current_region.x + x2,
+            current_region.y + y2,
+        )
 
     def recognize_shop(
         self,
@@ -102,20 +154,19 @@ class RecognitionEngine:
         """
         from core.vision.regions import GameRegions
 
-        self._update_scaler(screenshot)
+        self._update_transform(screenshot)
 
         if shop_regions is None:
             shop_regions = GameRegions.all_shop_slots()
 
-        # 缩放区域
-        scaled_regions = [r.scale(self.scaler) for r in shop_regions]
-
         results: list[RecognizedEntity | None] = []
 
-        for idx, region in enumerate(scaled_regions):
+        for idx, base_region in enumerate(shop_regions):
+            region = self._map_region(base_region)
             entity = self._recognize_in_region(
                 screenshot=screenshot,
                 region=region,
+                base_region=base_region,
                 entity_type="hero",
                 slot_index=idx,
             )
@@ -140,21 +191,24 @@ class RecognitionEngine:
         """
         from core.vision.regions import GameRegions
 
+        self._update_transform(screenshot)
+
         if board_region is None:
             board_region = GameRegions.BOARD
 
-        _ = board_region.scale(self.scaler)  # 缩放参数验证
+        _ = self._map_region(board_region)  # 缩放参数验证
         results: list[RecognizedEntity] = []
 
         # 遍历所有格子
         for row in range(4):
             for col in range(7):
                 cell = GameRegions.board_cell(row, col)
-                scaled_cell = cell.scale(self.scaler)
+                scaled_cell = self._map_region(cell)
 
                 entity = self._recognize_in_region(
                     screenshot=screenshot,
                     region=scaled_cell,
+                    base_region=cell,
                     entity_type="hero",
                 )
                 if entity:
@@ -179,14 +233,17 @@ class RecognitionEngine:
         """
         from core.vision.regions import GameRegions
 
+        self._update_transform(screenshot)
+
         if synergy_region is None:
             synergy_region = GameRegions.SYNERGY_BADGES
 
-        scaled_region = synergy_region.scale(self.scaler)
+        scaled_region = self._map_region(synergy_region)
         results: list[RecognizedEntity] = []
 
         # 裁剪羁绊区域
         cropped = screenshot.crop(scaled_region.bbox)
+        normalized = self._normalize_crop_to_base(cropped, synergy_region)
 
         # 对每个羁绊模板进行匹配
         for synergy_name in self.registry.list_entities("synergy"):
@@ -194,18 +251,12 @@ class RecognitionEngine:
             if template_path and template_path.exists():
                 # 使用模板匹配
                 match = self.matcher.match(
-                    image=cropped,
+                    image=normalized,
                     template_name=template_path.stem,
                     threshold=self.template_threshold,
                 )
                 if match:
-                    # 将坐标转换回原图坐标系
-                    bbox = (
-                        scaled_region.x + match.x,
-                        scaled_region.y + match.y,
-                        scaled_region.x + match.x + match.width,
-                        scaled_region.y + match.y + match.height,
-                    )
+                    bbox = self._map_local_bbox_to_global(match.bbox, scaled_region, synergy_region)
                     results.append(
                         RecognizedEntity(
                             entity_type="synergy",
@@ -237,16 +288,19 @@ class RecognitionEngine:
         """
         from core.vision.regions import GameRegions
 
+        self._update_transform(screenshot)
+
         if item_regions is None:
             item_regions = [GameRegions.item_slot(i) for i in range(10)]
 
-        scaled_regions = [r.scale(self.scaler) for r in item_regions]
         results: list[RecognizedEntity] = []
 
-        for idx, region in enumerate(scaled_regions):
+        for idx, base_region in enumerate(item_regions):
+            region = self._map_region(base_region)
             entity = self._recognize_in_region(
                 screenshot=screenshot,
                 region=region,
+                base_region=base_region,
                 entity_type="item",
                 slot_index=idx,
             )
@@ -272,18 +326,19 @@ class RecognitionEngine:
         """
         from core.vision.regions import GameRegions
 
-        self._update_scaler(screenshot)
+        self._update_transform(screenshot)
 
         if bench_regions is None:
             bench_regions = GameRegions.all_bench_slots()
 
-        scaled_regions = [r.scale(self.scaler) for r in bench_regions]
         results: list[RecognizedEntity | None] = []
 
-        for idx, region in enumerate(scaled_regions):
+        for idx, base_region in enumerate(bench_regions):
+            region = self._map_region(base_region)
             entity = self._recognize_in_region(
                 screenshot=screenshot,
                 region=region,
+                base_region=base_region,
                 entity_type="hero",
                 slot_index=idx,
             )
@@ -298,15 +353,16 @@ class RecognitionEngine:
         """识别金币和等级数字"""
         from core.vision.regions import GameRegions
 
-        self._update_scaler(screenshot)
+        self._update_transform(screenshot)
         result: dict[str, int | None] = {"gold": None, "level": None}
 
         regions = [("gold", GameRegions.GOLD_DISPLAY), ("level", GameRegions.LEVEL_DISPLAY)]
-        for key, region in regions:
-            scaled = region.scale(self.scaler)
+        for key, base_region in regions:
+            scaled = self._map_region(base_region)
             crop = screenshot.crop(scaled.bbox)
+            normalized = self._normalize_crop_to_base(crop, base_region)
             # 小图放大 3x 提高 OCR 识别率
-            big = crop.resize((crop.width * 3, crop.height * 3), Image.LANCZOS)
+            big = normalized.resize((normalized.width * 3, normalized.height * 3), Image.LANCZOS)
             result[key] = self.ocr.recognize_number(big)
 
         return result
@@ -316,6 +372,7 @@ class RecognitionEngine:
         screenshot: Image.Image,
         region: UIRegion,
         entity_type: str,
+        base_region: UIRegion | None = None,
         slot_index: int | None = None,
     ) -> RecognizedEntity | None:
         """
@@ -330,20 +387,30 @@ class RecognitionEngine:
         Returns:
             识别结果或 None
         """
-        # 裁剪区域
+        base_region = base_region or UIRegion(
+            name=f"{region.name}_base",
+            x=region.x,
+            y=region.y,
+            width=region.width,
+            height=region.height,
+        )
+
+        # 裁剪区域（当前尺寸）并归一化到基准 ROI 尺寸
         cropped = screenshot.crop(region.bbox)
+        normalized = self._normalize_crop_to_base(cropped, base_region)
 
         # 1. 尝试模板匹配
-        template_result = self._match_template(cropped, entity_type)
+        template_result = self._match_template(normalized, entity_type)
 
         # 2. 尝试 OCR
-        ocr_result = self._recognize_ocr(cropped, entity_type)
+        ocr_result = self._recognize_ocr(normalized, entity_type)
 
         # 3. 融合结果
         return self._fuse_results(
             template_result=template_result,
             ocr_result=ocr_result,
             region=region,
+            base_region=base_region,
             entity_type=entity_type,
             slot_index=slot_index,
         )
@@ -432,6 +499,7 @@ class RecognitionEngine:
         region: UIRegion,
         entity_type: str,
         slot_index: int | None,
+        base_region: UIRegion | None = None,
     ) -> RecognizedEntity | None:
         """
         融合模板匹配和 OCR 结果
@@ -446,16 +514,12 @@ class RecognitionEngine:
         Returns:
             融合后的识别结果
         """
+        base_region = base_region or region
+
         # 只有 OCR 结果
         if template_result is None and ocr_result is not None:
             name, conf, local_bbox = ocr_result
-            # 将局部坐标转换为全局坐标
-            global_bbox = (
-                region.x + local_bbox[0],
-                region.y + local_bbox[1],
-                region.x + local_bbox[2],
-                region.y + local_bbox[3],
-            )
+            global_bbox = self._map_local_bbox_to_global(local_bbox, region, base_region)
             return RecognizedEntity(
                 entity_type=entity_type,
                 entity_name=name,
@@ -468,12 +532,7 @@ class RecognitionEngine:
         # 只有模板匹配结果
         if template_result is not None and ocr_result is None:
             name, conf, local_bbox = template_result
-            global_bbox = (
-                region.x + local_bbox[0],
-                region.y + local_bbox[1],
-                region.x + local_bbox[2],
-                region.y + local_bbox[3],
-            )
+            global_bbox = self._map_local_bbox_to_global(local_bbox, region, base_region)
             return RecognizedEntity(
                 entity_type=entity_type,
                 entity_name=name,
@@ -490,12 +549,7 @@ class RecognitionEngine:
 
             # 如果两者识别出相同的实体，提高置信度
             if t_name == o_name:
-                global_bbox = (
-                    region.x + t_bbox[0],
-                    region.y + t_bbox[1],
-                    region.x + t_bbox[2],
-                    region.y + t_bbox[3],
-                )
+                global_bbox = self._map_local_bbox_to_global(t_bbox, region, base_region)
                 return RecognizedEntity(
                     entity_type=entity_type,
                     entity_name=t_name,
@@ -507,12 +561,7 @@ class RecognitionEngine:
 
             # 不同实体，选择置信度更高的
             if t_conf >= o_conf:
-                global_bbox = (
-                    region.x + t_bbox[0],
-                    region.y + t_bbox[1],
-                    region.x + t_bbox[2],
-                    region.y + t_bbox[3],
-                )
+                global_bbox = self._map_local_bbox_to_global(t_bbox, region, base_region)
                 return RecognizedEntity(
                     entity_type=entity_type,
                     entity_name=t_name,
@@ -522,12 +571,7 @@ class RecognitionEngine:
                     slot_index=slot_index,
                 )
             else:
-                global_bbox = (
-                    region.x + o_bbox[0],
-                    region.y + o_bbox[1],
-                    region.x + o_bbox[2],
-                    region.y + o_bbox[3],
-                )
+                global_bbox = self._map_local_bbox_to_global(o_bbox, region, base_region)
                 return RecognizedEntity(
                     entity_type=entity_type,
                     entity_name=o_name,
@@ -538,6 +582,10 @@ class RecognitionEngine:
                 )
 
         return None
+
+    def get_transform_diagnostics(self) -> dict[str, object]:
+        """返回最近一次识别使用的坐标映射诊断信息。"""
+        return self.transform.diagnostics()
 
 
 def create_recognition_engine(

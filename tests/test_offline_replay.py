@@ -19,6 +19,7 @@ from core.game_state import GameState
 from core.protocols import WindowInfo
 from core.rules.decision_engine import DecisionEngineBuilder
 from core.rules.validator import ActionValidator
+from core.vision.regions import GameRegions, UIRegion
 
 
 @dataclass
@@ -54,7 +55,10 @@ class FakePlatformAdapter:
     def get_screenshot(self) -> Image.Image:
         """返回静态截图"""
         if self._screenshot is None:
-            self._screenshot = Image.open(self._screenshot_path)
+            image = Image.open(self._screenshot_path)
+            if image.size != self._window_size:
+                image = image.resize(self._window_size, Image.NEAREST)
+            self._screenshot = image
         return self._screenshot.copy()
 
     def click(
@@ -121,10 +125,16 @@ class OfflineReplayTest:
         )
         self.validator = ActionValidator()
 
-    def replay_fixture(self, fixture_path: Path) -> ReplayResult:
+    def replay_fixture(
+        self,
+        fixture_path: Path,
+        window_size: tuple[int, int] = (1920, 1080),
+    ) -> ReplayResult:
         """对单个 fixture 执行完整回放"""
+        random.seed(self.seed)
+
         # 1. 加载截图
-        adapter = FakePlatformAdapter(fixture_path)
+        adapter = FakePlatformAdapter(fixture_path, window_size=window_size)
         screenshot = adapter.get_screenshot()
 
         # 2. 执行识别
@@ -160,20 +170,30 @@ class OfflineReplayTest:
 
     def _extract_fields(self, screenshot: Image.Image) -> dict[str, Any]:
         """从截图中提取字段"""
-        width, height = screenshot.size
         extracted: dict[str, Any] = {}
+        transform = GameRegions.create_transform(screenshot.size)
+
+        def crop_to_base(base_region: UIRegion) -> Image.Image:
+            current_region = base_region.scale(transform)
+            cropped = screenshot.crop(current_region.bbox)
+            if cropped.size == (base_region.width, base_region.height):
+                return cropped
+            return cropped.resize((base_region.width, base_region.height), Image.NEAREST)
 
         # 分析顶部区域 (回合/金币/等级)
-        top_region = screenshot.crop((0, 0, width, 60))
+        top_base = UIRegion(
+            name="replay_top_bar",
+            x=0,
+            y=0,
+            width=GameRegions.BASE_SIZE[0],
+            height=60,
+        )
+        top_region = crop_to_base(top_base)
         top_pixels = list(top_region.getdata())
 
         # 检测金色像素数量 (金币指示)
         gold_pixels = sum(1 for p in top_pixels if p[1] > 200 and p[2] < 100)
         extracted["gold"] = min(gold_pixels // 100, 100)
-
-        # 分析商店区域
-        shop_region = screenshot.crop((40, 900, 1880, 1060))
-        shop_pixels = list(shop_region.getdata())
 
         # 检测商店槽位颜色
         slot_colors = [
@@ -185,15 +205,21 @@ class OfflineReplayTest:
         ]
 
         detected_slots = 0
-        for color in slot_colors:
-            close_pixels = sum(
-                1
-                for p in shop_pixels
-                if abs(p[0] - color[0]) < 30
-                and abs(p[1] - color[1]) < 30
-                and abs(p[2] - color[2]) < 30
+        for slot_region in GameRegions.all_shop_slots():
+            slot_image = crop_to_base(slot_region)
+            slot_pixels = list(slot_image.getdata())
+            has_slot_color = any(
+                sum(
+                    1
+                    for p in slot_pixels
+                    if abs(p[0] - color[0]) < 30
+                    and abs(p[1] - color[1]) < 30
+                    and abs(p[2] - color[2]) < 30
+                )
+                > 80
+                for color in slot_colors
             )
-            if close_pixels > 100:
+            if has_slot_color:
                 detected_slots += 1
 
         extracted["shop_slots"] = min(detected_slots, 5)
@@ -250,6 +276,15 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures" / "screens"
 def replay_tester():
     """创建回放测试器"""
     return OfflineReplayTest(seed=42)
+
+
+@pytest.fixture(scope="module")
+def scaled_fixture_sizes() -> dict[str, tuple[int, int]]:
+    """缩放窗口尺寸版本（相对 1920x1080）。"""
+    return {
+        "0.75x": (1440, 810),
+        "1.25x": (2400, 1350),
+    }
 
 
 @pytest.fixture(scope="module")
@@ -346,6 +381,30 @@ class TestOfflineReplay:
         stable, all_actions = replay_tester.verify_stability(fixture, runs=3)
 
         assert stable, f"动作序列不稳定: {all_actions}"
+
+    def test_scaled_fixture_consistency(self, replay_tester, scaled_fixture_sizes):
+        """不同窗口缩放下识别字段与动作序列保持一致。"""
+        fixture = FIXTURES_DIR / "shop.png"
+        if not fixture.exists():
+            pytest.skip(f"Fixture not found: {fixture}")
+
+        baseline = replay_tester.replay_fixture(fixture, window_size=(1920, 1080))
+        baseline_action_types = [a["type"] for a in baseline.actions]
+
+        for label, size in scaled_fixture_sizes.items():
+            result = replay_tester.replay_fixture(fixture, window_size=size)
+            assert result.extracted_fields["gold"] == baseline.extracted_fields["gold"], (
+                f"{label} gold 不一致"
+            )
+            assert (
+                result.extracted_fields["shop_slots"] == baseline.extracted_fields["shop_slots"]
+            ), f"{label} shop_slots 不一致"
+            assert result.extracted_fields["level"] == baseline.extracted_fields["level"], (
+                f"{label} level 不一致"
+            )
+            assert [a["type"] for a in result.actions] == baseline_action_types, (
+                f"{label} 动作序列不一致: {result.actions} vs {baseline.actions}"
+            )
 
     def test_all_fixtures_produce_actions(self, replay_tester, fixture_files):
         """所有 fixture 都能产生有效动作"""

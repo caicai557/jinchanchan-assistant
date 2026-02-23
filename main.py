@@ -601,6 +601,7 @@ async def run_offline_replay_test_async() -> int:
     from core.game_state import GameState
     from core.rules.decision_engine import DecisionEngineBuilder
     from core.rules.validator import ActionValidator
+    from core.vision.regions import GameRegions, UIRegion
 
     print("=== 离线回放自检测试 ===")
     print()
@@ -635,20 +636,30 @@ async def run_offline_replay_test_async() -> int:
 
     # 提取字段
     def extract_fields(screenshot: Image.Image) -> dict:
-        width, height = screenshot.size
         extracted = {}
+        transform = GameRegions.create_transform(screenshot.size)
+
+        def crop_to_base(base_region: UIRegion) -> Image.Image:
+            current_region = base_region.scale(transform)
+            cropped = screenshot.crop(current_region.bbox)
+            if cropped.size == (base_region.width, base_region.height):
+                return cropped
+            return cropped.resize((base_region.width, base_region.height), Image.NEAREST)
 
         # 分析顶部区域
-        top_region = screenshot.crop((0, 0, width, 60))
+        top_base = UIRegion(
+            name="replay_top_bar",
+            x=0,
+            y=0,
+            width=GameRegions.BASE_SIZE[0],
+            height=60,
+        )
+        top_region = crop_to_base(top_base)
         top_pixels = list(top_region.getdata())
 
         # 检测金币
         gold_pixels = sum(1 for p in top_pixels if p[1] > 200 and p[2] < 100)
         extracted["gold"] = min(gold_pixels // 100, 100)
-
-        # 分析商店区域
-        shop_region = screenshot.crop((40, 900, 1880, 1060))
-        shop_pixels = list(shop_region.getdata())
 
         slot_colors = [
             (80, 160, 80),
@@ -659,15 +670,21 @@ async def run_offline_replay_test_async() -> int:
         ]
 
         detected_slots = 0
-        for color in slot_colors:
-            close_pixels = sum(
-                1
-                for p in shop_pixels
-                if abs(p[0] - color[0]) < 30
-                and abs(p[1] - color[1]) < 30
-                and abs(p[2] - color[2]) < 30
+        for slot_region in GameRegions.all_shop_slots():
+            slot_image = crop_to_base(slot_region)
+            slot_pixels = list(slot_image.getdata())
+            has_slot_color = any(
+                sum(
+                    1
+                    for p in slot_pixels
+                    if abs(p[0] - color[0]) < 30
+                    and abs(p[1] - color[1]) < 30
+                    and abs(p[2] - color[2]) < 30
+                )
+                > 80
+                for color in slot_colors
             )
-            if close_pixels > 100:
+            if has_slot_color:
                 detected_slots += 1
 
         extracted["shop_slots"] = min(detected_slots, 5)
